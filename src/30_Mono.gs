@@ -14,16 +14,34 @@ const IMPORT_HOURS = [12, 18, 23], IMPORT_MINUTE = 45; // за часом таб
 const IMPORT_RETRY_MIN = [10, 30];
 const IMPORT_SLOTS = IMPORT_HOURS.map(h => pad2_(h) + ':' + pad2_(IMPORT_MINUTE)).join(', ');
 
+/** Паузи перед повтором, коли Mono приймає сервер Google за VPN (наступний запит часто йде з іншої адреси), мс. */
+const MONO_VPN_WAIT = [5000, 20000];
+function monoVpnText_() {
+  return 'Mono тимчасово заблокував з\'єднання: сервери Google, з яких працює скрипт таблиці, для Mono іноді схожі на VPN. ' +
+    'Це не у вас і не з токеном. Зачекайте 5 хвилин, оновіть сторінку таблиці й запустіть «🏦 Імпорт з банку зараз» ще раз. ' +
+    'За розкладом скрипт сам повторить за 10 і 30 хв.';
+}
+
+/** Помилка Mono з тіла відповіді: { code: errCode, text: errText / errTitle / errorDescription }. */
+function monoErr_(body) {
+  try {
+    const o = JSON.parse(body);
+    return { code: String(o.errCode || ''), text: String(o.errText || o.errTitle || o.errorDescription || o.message || '').slice(0, 200) };
+  } catch (e) { return { code: '', text: String(body || '').slice(0, 200) }; }
+}
+
 function monoFetch_(token, path) {
-  for (let attempt = 0; attempt < 2; attempt++) {
+  let busy = 0, vpn = 0;
+  for (;;) {
     const r = UrlFetchApp.fetch(MONO_API + path, { headers: { 'X-Token': token }, muteHttpExceptions: true });
     const code = r.getResponseCode();
     if (code === 200) return JSON.parse(r.getContentText());
-    if (code === 429 && attempt === 0) { Utilities.sleep(61 * 1000); continue; }
+    const e = monoErr_(r.getContentText());
+    if (code === 429) { if (busy++ === 0) { Utilities.sleep(61 * 1000); continue; } throw new Error('Mono: забагато запитів, спробуйте за хвилину.'); }
+    if (e.code === 'VPN_BLOCKED') { if (vpn < MONO_VPN_WAIT.length) { Utilities.sleep(MONO_VPN_WAIT[vpn++]); continue; } throw new Error(monoVpnText_()); }
     if (code === 401 || code === 403) throw new Error('Mono не прийняв токен (код ' + code + '). Створіть новий на api.monobank.ua і підключіть знову.');
-    throw new Error('Mono відповів кодом ' + code + ': ' + String(r.getContentText()).slice(0, 200));
+    throw new Error('Mono відповів кодом ' + code + (e.text ? ': ' + e.text : '') + (e.code ? ' (' + e.code + ')' : ''));
   }
-  throw new Error('Mono: забагато запитів, спробуйте за хвилину.');
 }
 
 /* ---------- рахунки Mono ---------- */

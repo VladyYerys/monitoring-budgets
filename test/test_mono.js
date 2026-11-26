@@ -155,4 +155,20 @@ t('family: two people, each with own Mono in own account; the second card is «�
   assert.strictEqual(JSON.stringify([olena.g, olena.kind]), JSON.stringify(['Олена', 'основна картка']));
 });
 
+t('Mono «VPN_BLOCKED» (Google servers look like a VPN to Mono): two quiet retries; still blocked → a plain explanation, not raw JSON; other errors show Mono\'s own text', () => {
+  let h = null;
+  const env = makeEnv({ mono: url => h(url) }), c = env.ctx, blocked = { code: 400, body: { errCode: 'VPN_BLOCKED', errTitle: 'З\'єднання заблоковано', errText: 'Змініть IP-адресу або вимкніть VPN', errButton: 'Зрозуміло' } };
+  let left = 1;
+  h = () => (left-- > 0 ? blocked : { code: 200, body: { name: 'Тест', accounts: [] } });
+  const s0 = env.calls.sleep;
+  assert.strictEqual(c.monoFetch_(TOKEN, '/personal/client-info').name, 'Тест', 'вдруге пройшло');
+  assert.strictEqual(env.calls.sleep - s0, 5000);
+  h = () => blocked;
+  const f0 = env.calls.fetch.length;
+  assert.throws(() => c.monoFetch_(TOKEN, '/personal/client-info'), e => /сервери Google/.test(e.message) && /Зачекайте 5 хвилин, оновіть сторінку/.test(e.message) && /10 і 30 хв/.test(e.message) && !/errCode|\{|400/.test(e.message));
+  assert.strictEqual(env.calls.fetch.length - f0, 3, 'запит і два повтори');
+  h = () => ({ code: 400, body: { errorDescription: 'Period must be no more than 31 days' } });
+  assert.throws(() => c.monoFetch_(TOKEN, '/personal/statement/x/1/2'), e => e.message === 'Mono відповів кодом 400: Period must be no more than 31 days');
+});
+
 console.log(n + ' tests passed');
