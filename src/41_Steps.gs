@@ -24,12 +24,15 @@ const STEPS = [
       mainHasLabel_(ss, 'Грейс: строк') &&
       String(ss.getSheetByName(SETTINGS_SHEET).getRange('A22').getValue()) === 'Радник і нагадування' },
   { v: 7, title: '🧭 Шапка журналу: мої, бюджети зі смужками, прогноз, грейс', auto: ss => stepHeader_(ss), done: ss => headerIsNew_(ss) },
+  { v: 8, title: '🗂 Менше вкладок: «Регулярні», графіки на «Головному» й «📱 Телефоні», службові аркуші сховано', auto: ss => stepTabs_(ss),
+    done: ss => [REG_SHEET, CH_SHEET, PHONE_SHEET].every(n => !!ss.getSheetByName(n)) && modBlockFull_(ss) },
 ];
 /** Остання версія таблиці в цьому коді. */
 function schemaLast_() { return STEPS[STEPS.length - 1].v; }
 const SCHEMA_RETRY_MS = 6 * 3600 * 1000;
-const SHEET_ORDER = [START_SHEET, MAIN_SHEET, JOURNAL, MONTHS_SHEET, DAYS_SHEET, FOP_SHEET, DEBTS_SHEET, DICT_SHEET, RULES_SHEET, ACC_SHEET, CP_SHEET, BANK_SHEET, HISTORY_SHEET,
-  H_CAT_SHEET, CHECK_SHEET, SETTINGS_SHEET];
+/** Порядок вкладок: робочі зліва, службові (зазвичай сховані) справа. */
+const SHEET_ORDER = [START_SHEET, MAIN_SHEET, JOURNAL, REG_SHEET, MONTHS_SHEET, DAYS_SHEET, PHONE_SHEET, FOP_SHEET, DEBTS_SHEET, DICT_SHEET, SETTINGS_SHEET,
+  RULES_SHEET, ACC_SHEET, CP_SHEET, BANK_SHEET, HISTORY_SHEET, H_CAT_SHEET, CHECK_SHEET, CH_SHEET];
 
 function buildIfMissing_(ss, name, fn, out) { if (!ss.getSheetByName(name)) { fn(ss); out.push('«' + name + '» ✓'); } }
 
@@ -116,6 +119,65 @@ function stepHeader_(ss) {
   return ['Шапка журналу: мої й картка, три найгірші бюджети зі смужкою, наступний місяць, ' + (modOn_('credit') ? 'грейс' : 'на день') + '; «№ … ↓» веде на рядок для вводу.'];
 }
 
+/**
+ * Версія 8: аркуш «Регулярні» (плани з правил), «Дані графіків» (схований), графіки на «Головному» сіткою, «📱 Телефон»,
+ * модуль «🗂 Службові аркуші» (типово «ні»: службові аркуші сховано), вкладки в новому порядку. Ваші дані не змінюються.
+ */
+function stepTabs_(ss) {
+  const out = [];
+  buildIfMissing_(ss, REG_SHEET, buildRegular_, out);
+  if (ss.getSheetByName(MAIN_SHEET)) {
+    if (!ss.getSheetByName(CH_SHEET)) buildChartsData_(ss);
+    out.push('«' + MAIN_SHEET + '»: графіків ' + chartsMain_(ss));
+  }
+  if (ss.getSheetByName(MAIN_SHEET)) buildIfMissing_(ss, PHONE_SHEET, buildPhone_, out);
+  if (ss.getSheetByName(START_SHEET) && !modBlockFull_(ss)) { modBlockAdd_(ss); out.push('модуль «' + modName_('service') + '» на «' + START_SHEET + '»'); }
+  if (PropertiesService.getDocumentProperties().getProperty('prot') !== 'off' && modOn_('backup')) applyProtection_(ss);
+  try { sheetsReorder_(ss); } catch (e) { /* порядок вкладок не критичний */ }
+  const lines = modulesApply_(ss, false);
+  sheetsVisibility_(ss);
+  return (out.length ? ['Додано: ' + out.join(', ') + '.'] : ['Усе вже було.'])
+    .concat(lines.filter(l => l.indexOf('Змін немає') < 0), [modOn_('service') ? 'Службові аркуші видно.' : 'Службові аркуші сховано: показати на «' + START_SHEET + '», «' + modName_('service') + '»: так.']);
+}
+
+/** Блок модулів має рядок для кожного модуля (нові модулі дописуються в кінець). */
+function modBlockFull_(ss) {
+  if (!startHasModules_(ss)) return false;
+  const v = ss.getSheetByName(START_SHEET).getRange(MOD_FIRST, 1, MODS.length, 1).getValues();
+  return MODS.every((m, i) => String(v[i][0]) === m.name);
+}
+
+/** Дописати порожні рядки нових модулів, не чіпаючи вже вибраних «так» / «ні». Інша назва в рядку: блок заново. */
+function modBlockAdd_(ss) {
+  const st = ensureSize_(ss.getSheetByName(START_SHEET), MOD_FIRST + MODS.length + 5, 4);
+  if (!startHasModules_(ss)) { startModulesBlock_(ss, st); return; }
+  const v = st.getRange(MOD_FIRST, 1, MODS.length, 1).getValues(), init = modInitial_(ss);
+  if (MODS.some((m, i) => String(v[i][0]) !== '' && String(v[i][0]) !== m.name)) { startModulesBlock_(ss, st); return; }
+  MODS.forEach((m, i) => {
+    if (String(v[i][0]) !== '') return;
+    st.getRange(MOD_FIRST + i, 1, 1, 3).setValues([[m.name, init[m.id] ? MOD_YES : MOD_NO, m.what]]);
+    st.getRange(MOD_FIRST + i, 2).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList([MOD_YES, MOD_NO]).setAllowInvalid(false).build())
+      .setHorizontalAlignment('center').setFontWeight('bold');
+    st.getRange(MOD_FIRST + i, 3).setFontColor('#5f6368');
+  });
+}
+
+/** Наші вкладки в порядку SHEET_ORDER; чужі лишаються після них. Нічого не видаляє. */
+function sheetsReorder_(ss) {
+  if (!ss.setActiveSheet || !ss.moveActiveSheet) return;
+  const was = ss.getActiveSheet ? ss.getActiveSheet() : null;
+  SHEET_ORDER.filter(n => !!ss.getSheetByName(n)).forEach((n, i) => { ss.setActiveSheet(ss.getSheetByName(n)); ss.moveActiveSheet(i + 1); });
+  try { if (was) ss.setActiveSheet(was); } catch (e) { /* ignore */ }
+}
+
+/** Видимість після перестановки (активація могла показати схований аркуш): модулі й «Дані графіків». */
+function sheetsVisibility_(ss) {
+  SERVICE_SHEETS.forEach(n => sheetShow_(ss, n, modOn_('service')));
+  sheetShow_(ss, FOP_SHEET, modOn_('fop'));
+  sheetShow_(ss, DEBTS_SHEET, modOn_('debts'));
+  sheetShow_(ss, CH_SHEET, false);
+}
+
 function mainHasLabel_(ss, label) {
   const sh = ss.getSheetByName(MAIN_SHEET);
   return !!sh && sh.getRange(1, 1, Math.min(Math.max(sh.getLastRow(), 1), 120), 1).getValues().some(r => String(r[0]) === label);
@@ -132,6 +194,7 @@ function tidySheets_(ss) {
   const ours = SHEET_ORDER.filter(n => !!ss.getSheetByName(n));
   ss.getSheets().filter(s => ours.indexOf(s.getName()) < 0 && s.getLastRow() === 0 && s.getLastColumn() === 0).forEach(s => { if (ss.getSheets().length > 1) ss.deleteSheet(s); });
   if (ss.setActiveSheet && ss.moveActiveSheet) ours.forEach((n, i) => { ss.setActiveSheet(ss.getSheetByName(n)); ss.moveActiveSheet(i + 1); });
+  sheetsVisibility_(ss);
 }
 
 /* ---------- запуск кроків ---------- */

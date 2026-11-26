@@ -22,18 +22,19 @@ function toggle(env, name, v) {
 const mainRow = (env, label) => 1 + env.ss.getSheetByName('Головне').getRange('A1:A120').getValues().findIndex(r => r[0] === label);
 const trig = (env, fn) => env.triggers.some(x => x.getHandlerFunction() === fn);
 
-t('new table: block «🧩 Модулі» on «Старт» with 8 modules, typical values, mods saved, FOP and debts hidden, module cells free under protection', () => {
+t('new table: block «🧩 Модулі» on «Старт» with 9 modules, typical values, mods saved, FOP and debts hidden, module cells free under protection', () => {
   const env = setup(), c = env.ctx;
   assert.strictEqual(st(env).getRange('A24').getValue(), '🧩 Модулі');
-  const v = st(env).getRange('A26:B33').getValues();
-  assert.strictEqual(JSON.stringify(v.map(r => r[1])), JSON.stringify(['так', 'так', 'ні', 'так', 'ні', 'так', 'ні', 'ні']));
+  const v = st(env).getRange('A26:B34').getValues();
+  assert.strictEqual(JSON.stringify(v.map(r => r[1])), JSON.stringify(['так', 'так', 'ні', 'так', 'ні', 'так', 'ні', 'ні', 'ні']));
+  assert.strictEqual(v[8][0], '🗂 Службові аркуші');
   assert.ok(st(env).getRange('B26').getDataValidation().reject, 'лише так / ні');
   const mods = JSON.parse(env.docProps.getProperty('mods'));
   assert.strictEqual(mods.tg, true); assert.strictEqual(mods.fop, false); assert.strictEqual(mods.debts, false);
   assert.strictEqual(env.ss.getSheetByName('ФОП').isSheetHidden(), true);
   assert.strictEqual(env.ss.getSheetByName('Борги').isSheetHidden(), true);
   const p = st(env).prots.find(x => /Monitoring Budgets/.test(x.getDescription()));
-  assert.ok(p && p.unprot.indexOf('B26:B33') >= 0, 'клітинки модулів вільні');
+  assert.ok(p && p.unprot.indexOf('B26:B34') >= 0, 'клітинки модулів вільні');
   assert.ok(mainRow(env, 'Грейс: внести до строку') > 0 && mainRow(env, 'Борги: я винен (залишок)') > 0);
   assert.ok(env.ss.getSheetByName('Головне').isRowHiddenByUser(mainRow(env, 'Борги: я винен (залишок)')), 'борги вимкнено: рядки сховано');
 });

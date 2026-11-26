@@ -27,6 +27,9 @@ function protectList_() {
     { sheet: H_CAT_SHEET, allow: [] },
     { sheet: BANK_SHEET, allow: [] },
     { sheet: START_SHEET, allow: ['B' + MOD_FIRST + ':B' + (MOD_FIRST + MODS.length - 1)] },
+    { sheet: REG_SHEET, allow: ['A' + REG_FIRST + ':I' + REG_LAST] },
+    { sheet: CH_SHEET, allow: [] },
+    { sheet: PHONE_SHEET, allow: [] },
   ];
 }
 

@@ -149,7 +149,7 @@ function snapshotText_(ss, opt) {
     });
   } else {
     plans.slice(0, 80).forEach(o => out.push('- ' + advDate_(o.key) + ' · ' + (o.c || 'без категорії') + ' · ' + advMoney_(o.b) + (TYPES_IN.indexOf(o.i) >= 0 ? ' (надходження)' : '') +
-      (o.g ? ' · ' + o.g : '') + (o.d.indexOf(FOP_TAG) === 0 || o.d.indexOf(DEBT_TAG) === 0 ? ' · ' + o.d : '')));
+      (o.g ? ' · ' + o.g : '') + (o.d.indexOf(FOP_TAG) === 0 || o.d.indexOf(DEBT_TAG) === 0 ? ' · ' + o.d : o.d.indexOf(REG_TAG) === 0 ? ' · регулярний' : '')));
     if (plans.length > 80) out.push('- … ще ' + (plans.length - 80));
   }
   out.push('');

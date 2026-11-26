@@ -364,7 +364,7 @@ function makeEnv(opts = {}) {
     return { getResponseCode: () => r.code, getContentText: () => (typeof r.body === 'string' ? r.body : JSON.stringify(r.body)) };
   } };
   const ctx = {
-    Charts: { ChartType: { LINE: 'LINE', COLUMN: 'COLUMN' } },
+    Charts: { ChartType: { LINE: 'LINE', COLUMN: 'COLUMN', AREA: 'AREA', BAR: 'BAR', PIE: 'PIE' } },
     SpreadsheetApp: { getActive: () => ss, flush: () => {}, openById: id => { if (!others[id]) throw new Error('no spreadsheet ' + id); calls.opened = (calls.opened || []).concat([id]); return others[id]; }, getUi: () => { if (opts.noUi) throw new Error('no ui'); return ui; },
       ProtectionType: { SHEET: 'SHEET', RANGE: 'RANGE' }, newDataValidation: () => new DVB(), newConditionalFormatRule: () => new CFB(),
       DataValidationCriteria: { VALUE_IN_LIST: 'VALUE_IN_LIST', VALUE_IN_RANGE: 'VALUE_IN_RANGE' },

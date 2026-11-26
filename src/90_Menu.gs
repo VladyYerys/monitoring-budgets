@@ -22,6 +22,7 @@ function onOpen() {
     .addItem('🏦 Імпорт з банку зараз', 'importNow')
     .addItem('📥 Імпорт виписок з папки', 'importStatements')
     .addItem('✅ Підтвердити чернетки з категорією', 'confirmDrafts')
+    .addItem('🔁 Регулярні: оновити плани зараз', 'regularNow')
     .addItem('📚 Записати місяць в «Історію»…', 'historyMonthNow')
     .addItem('💾 Копія зараз', 'backupNow')
     .addSubMenu(ui.createMenu('🎬 Демо')

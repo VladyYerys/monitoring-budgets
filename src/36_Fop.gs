@@ -162,9 +162,10 @@ function fopClosed_(ss) {
 
 /**
  * Плани з тегом у журналі (ФОП, борги): оновлює суми й дати своїх рядків («🔁 план регулярний», коментар «<тег>…»), додає нові,
- * прибирає зайві майбутні. Ваші рядки не чіпає. want: [{ key, date, amount, cat, who }]. → { added, updated, removed }
+ * прибирає зайві майбутні. Ваші рядки не чіпає. want: [{ key, date, amount, cat, who }]. drop (необов'язково): коментарі планів,
+ * які прибрати навіть з минулою датою (місяць уже сплачено, правило вимкнено). → { added, updated, removed }
  */
-function tagPlansSync_(ss, tag, want, rows) {
+function tagPlansSync_(ss, tag, want, rows, drop) {
   const sh = ss.getSheetByName(JOURNAL), tz = ss.getSpreadsheetTimeZone(), st = { added: 0, updated: 0, removed: 0 };
   if (!sh) return st;
   const today = todayKey_(ss), byKey = {};
@@ -174,7 +175,7 @@ function tagPlansSync_(ss, tag, want, rows) {
   rows.filter(o => o.e === STATUS_REG && o.d.indexOf(tag) === 0).forEach(o => {
     const w = byKey[o.d];
     if (!w) {
-      if (o.key >= today) { sh.getRange(o.row, 1, 1, J_INPUT_N).setValues([['', '', '', '', '', '', '', '']]); sh.getRange(o.row, colNum_(JC.bankId), 1, J_MOVE_N).setValues([emptyBank_().concat(['', ''])]); st.removed++; }
+      if (o.key >= today || (drop && drop.indexOf(o.d) >= 0)) { sh.getRange(o.row, 1, 1, J_INPUT_N).setValues([['', '', '', '', '', '', '', '']]); sh.getRange(o.row, colNum_(JC.bankId), 1, J_MOVE_N).setValues([emptyBank_().concat(['', ''])]); st.removed++; }
       return;
     }
     delete byKey[o.d];

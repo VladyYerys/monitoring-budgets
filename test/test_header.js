@@ -77,7 +77,7 @@ t('upgrade of a version-6 table to 7: old one-line header replaced, backup first
   env.docProps.setProperty('schema_v', '6');
   const f0 = env.files.length;
   assert.strictEqual(c.schemaTick_(env.ss), true);
-  assert.strictEqual(env.docProps.getProperty('schema_v'), '7');
+  assert.strictEqual(env.docProps.getProperty('schema_v'), String(c.schemaLast_()));
   assert.strictEqual(env.files.length, f0 + 1, 'копія перед змінами');
   assert.strictEqual(c.headerIsNew_(env.ss), true);
   j.gid = 4242;                                                          // копія таблиці: інший id аркуша

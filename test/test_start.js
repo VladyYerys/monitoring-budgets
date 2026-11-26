@@ -20,12 +20,13 @@ t('wizard in an empty table: builds, family of two, debit card, FOP, drops sets,
   assert.ok(cats.indexOf('ЄСВ') >= 0, 'ФОП є: податкові категорії лишились');
   assert.ok(!env.ss.getSheetByName('Правила').getRange('E5:E204').getValues().some(r => r[0] === 'Пальне'), 'правила прибраних категорій теж');
   const rows = c.readJournal_(env.ss).filter(o => !o.blank);
-  assert.ok(rows.length > 30 && rows.every(o => o.d.indexOf('[демо] ') === 0));
+  assert.ok(rows.length > 30 && rows.every(o => o.d.indexOf('[демо] ') === 0 || o.d.indexOf('[Регулярний] [демо] ') === 0));
+  assert.ok(rows.some(o => o.d.indexOf('[Регулярний] [демо] Комуналка: ') === 0 && o.e === '🔁 план регулярний'), 'демо-правила «Регулярних» стали планами');
   assert.ok(rows.some(o => o.g === 'Олена') && rows.some(o => o.g === 'спільне'), 'у сім\'ї демо розкладене за «Хто»');
   const st = env.ss.getSheetByName('Старт');
   assert.strictEqual(st.getRange('A6').getValue(), '✓', 'майстер пройдено');
   // модулі: рекомендовані для дебетової картки з ФОП
-  const mod = name => st.getRange('A26:B33').getValues().find(r => r[0] === name)[1];
+  const mod = name => st.getRange('A26:B34').getValues().find(r => r[0] === name)[1];
   assert.strictEqual(mod('💳 Кредитний ліміт і грейс'), 'ні', 'дебетова картка: без ліміту');
   assert.strictEqual(mod('🧾 ФОП'), 'так'); assert.strictEqual(mod('🤝 Борги й розстрочки'), 'ні'); assert.strictEqual(mod('💾 Копії й захист'), 'так');
   assert.strictEqual(env.ss.getSheetByName('ФОП').isSheetHidden(), false, 'ФОП є: аркуш видно');

@@ -16,6 +16,10 @@ function onEdit(e) {
   if (!e || !e.range) return;
   if (!quietOk_()) return;
   const sh = e.range.getSheet();
+  if (sh.getName() === REG_SHEET) {                                  // «Регулярні»: плани оновить mbsTick (regIfDue_)
+    if (e.range.getLastRow() >= REG_FIRST && e.range.getColumn() <= 9) PropertiesService.getDocumentProperties().setProperty('reg_edit', String(Date.now()));
+    return;
+  }
   if (sh.getName() !== JOURNAL) return;
   const r0 = e.range.getRow(), r1 = e.range.getLastRow(), c0 = e.range.getColumn(), c1 = e.range.getLastColumn();
   if (r1 < J_FIRST || c0 > J_INPUT_N) return;
@@ -58,6 +62,7 @@ function mbsEdit(e) {
   if (!e || !e.range || !quietOk_()) return;
   if (isModulesEdit_(e.range)) { try { modulesIfChanged_(e.range.getSheet().getParent()); } catch (x) { /* застосує mbsTick */ } return; }
   const name = e.range.getSheet().getName();
+  if (name === REG_SHEET && e.range.getLastRow() >= REG_FIRST) { soonPlan_(SORT_SOON_MS); return; }
   if (name !== JOURNAL || e.range.getLastRow() < J_FIRST || e.range.getColumn() > J_INPUT_N) return;
   soonPlan_(SORT_SOON_MS);
 }
@@ -101,11 +106,13 @@ function mbsTick() {
   try { monthCloseIfDue_(ss); } catch (e) { /* наступного разу */ }
   try { fopIfDue_(ss); } catch (e) { /* плани ФОП: наступного разу */ }
   try { debtsIfDue_(ss); } catch (e) { /* плани боргів: наступного разу */ }
+  try { regIfDue_(ss); } catch (e) { /* регулярні плани: наступного разу */ }
   try { calIfDue_(ss); } catch (e) { /* помилка в cal_err */ }
   try { startIfDue_(ss); } catch (e) { /* чекліст: наступного разу */ }
   try { advisorIfDue_(ss); } catch (e) { /* знімок: помилка в adv_err */ }
   try { verIfDue_(ss); } catch (e) { /* перевірка версії: завтра */ }
   try { headerIfDue_(ss); } catch (e) { /* шапка: завтра */ }
+  try { chartsIfDue_(ss); } catch (e) { /* групи графіків: завтра */ }
 }
 
 function sortNow() {

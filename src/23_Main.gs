@@ -4,7 +4,7 @@
  * Колонка A: підпис, B: значення (формула), C: що це. Telegram, звіти й «Перевірка» читають значення за підписом
  * (mainByLabel_), тож рядки можна переставляти, а підписи міняти не варто.
  * Звідки: «Дні» (картка, борг, ліміт, «мої», прогнози) і журнал (місяць, чернетки, червоні рядки).
- * Графіки: баланс по днях (на картці, прогноз за планом, «як зараз») і витрати по місяцях (план і факт).
+ * Графіки (27_Charts.gs): сітка у дві колонки від рядка 18 праворуч від таблиці; таблиця E3:G15 живить графік «Витрати по місяцях».
  */
 
 const MAIN_FIRST = 4;
@@ -121,28 +121,11 @@ function buildMain_(ss) {
   setF_(sh.getRange(head + 1, t0, 12, 3), tbl);
   sh.getRange(head + 1, t0, 12, 1).setNumberFormat('mmm yyyy');
   sh.getRange(head + 1, t0 + 1, 12, 2).setNumberFormat('#,##0');
-  mainCharts_(ss, sh);
+  mainCharts_(ss);
   journalHeader_(ss);
   sh.setFrozenRows(MAIN_FIRST - 1);
   return sh;
 }
 
-/** Графіки на «Головному» (замінює свої, чужі не чіпає). */
-function mainCharts_(ss, sh) {
-  sh.getCharts().forEach(c => { try { if (String(c.getOptions().get('title') || '').indexOf('📈') === 0 || String(c.getOptions().get('title') || '').indexOf('📊') === 0) sh.removeChart(c); } catch (e) { /* ignore */ } });
-  const d = ss.getSheetByName(DAYS_SHEET), last = DAYS_FIRST + DAYS_ROWS - 1, h = DAYS_FIRST - 1;
-  const days = sh.newChart().setChartType(Charts.ChartType.LINE)
-    .addRange(d.getRange('A' + h + ':A' + last)).addRange(d.getRange('E' + h + ':E' + last))
-    .addRange(d.getRange('L' + h + ':L' + last)).addRange(d.getRange('M' + h + ':M' + last))
-    .setNumHeaders(1).setPosition(MAIN_FIRST + 16, MAIN_TABLE_COL, 0, 0)
-    .setOption('title', '📈 На картці по днях: факт, за планом, як зараз').setOption('height', 300).setOption('width', 620)
-    .setOption('legend', { position: 'bottom' }).build();
-  sh.insertChart(days);
-  const months = sh.newChart().setChartType(Charts.ChartType.COLUMN)
-    .addRange(sh.getRange(MAIN_FIRST - 1, MAIN_TABLE_COL, 13, 3))
-    .setNumHeaders(1).setPosition(MAIN_FIRST + 33, MAIN_TABLE_COL, 0, 0)
-    .setOption('title', '📊 Витрати по місяцях: план і факт').setOption('height', 300).setOption('width', 620)
-    .setOption('legend', { position: 'bottom' }).build();
-  sh.insertChart(months);
-}
-
+/** Графіки на «Головному»: 27_Charts.gs (замінює свої, чужі не чіпає). */
+function mainCharts_(ss) { return chartsMain_(ss); }

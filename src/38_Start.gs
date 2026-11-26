@@ -31,20 +31,22 @@ function startSteps_(ss) {
   const has = fn => hasTrigger_(fn), rows = ss.getSheetByName(JOURNAL) ? readJournal_(ss).filter(o => !o.blank) : [];
   const cp = ss.getSheetByName(CP_SHEET) ? ss.getSheetByName(CP_SHEET).getRange(CP_FIRST, 1, 30, 2).getValues().some(r => r[0] && r[1] !== '') : false;
   const cs = checkState_(ss), up = PropertiesService.getUserProperties(), fops = fopList_(ss);
+  const hid = modOn_('service') ? '' : ' (сховано: «' + modName_('service') + '»: так)';
   return [
     [!!dp.getProperty('wiz_done'), 'Майстер «🚀 Почати» пройдено', 'меню «📊 ' + APP_NAME + ' → 🚀 Почати»'],
     [!!(set && set.getRange(SET.start).getValue()), 'Старт обліку «моїх грошей», вид картки, день доходу', 'аркуш «' + SETTINGS_SHEET + '»'],
     [fam ? members_(ss).length >= 2 : null, 'Учасники сім\'ї (до 5)', '«' + SETTINGS_SHEET + '», блок «Сім\'я»'],
     [accs.length > 0, 'Банк: Mono, ПриватБанк для ФОП або виписка', 'меню «⚙️ Налаштування» або «📥 Імпорт виписок з папки»'],
     [up.getProperty('mono_token') || up.getProperty('pb_token') ? has(TRG.imp) : null, 'Імпорт з банку за розкладом (ваш)', '«⚙️ Налаштування → 🏦 Імпорт за розкладом: увімкнути»'],
-    [cp, 'Залишок на картці (контрольна точка)', 'сам з Mono або вручну на «' + CP_SHEET + '»'],
+    [cp, 'Залишок на картці (контрольна точка)', 'сам з Mono або вручну на «' + CP_SHEET + '»' + hid],
     [rows.length > 0, 'Перші записи в журналі', 'аркуш «' + JOURNAL + '» або демо-місяць'],
+    [ss.getSheetByName(REG_SHEET) ? regList_(ss).length > 0 : null, 'Регулярні платежі й доходи (оренда, підписки, зарплата)', 'аркуш «' + REG_SHEET + '»: стануть планами в журналі'],
     [modOn_('tg') ? tgConnected_() : null, 'Telegram-бот (ранковий підсумок, звіти)', '«⚙️ Налаштування → 📨 Підключити Telegram-бота»'],
     [modOn_('cal') ? !!dp.getProperty('cal_stat') : null, 'Календар платежів', 'увімкнено модулем; оновлюється сам'],
     [modOn_('fop') ? fops.length > 0 : null, 'ФОП: група, ставки', 'аркуш «' + FOP_SHEET + '»'],
     [modOn_('debts') ? debtsList_(ss).length > 0 : null, 'Борги й розстрочки', 'аркуш «' + DEBTS_SHEET + '»'],
     [modOn_('advisor') ? !!dp.getProperty('adv_doc_id') : null, 'Радник Gemini: знімок і навичка', 'меню «🤖 Радник Gemini»'],
-    [cs.none ? null : cs.bad.length === 0, '«' + CHECK_SHEET + '»: усе OK', 'аркуш «' + CHECK_SHEET + '»'],
+    [cs.none ? null : cs.bad.length === 0, '«' + CHECK_SHEET + '»: усе OK', 'аркуш «' + CHECK_SHEET + '»' + hid],
   ];
 }
 
@@ -57,6 +59,7 @@ function startRefresh_(ss) {
   const done = steps.filter(s => s[0] === true).length, need = steps.filter(s => s[0] !== null).length;
   sh.getRange(3, 1).setValue('Готово: ' + done + ' з ' + need + (done === need ? ' ✅' : '')).setFontWeight('bold');
   const foot = START_FIRST + steps.length + 2;
+  if (MOD_HEAD > START_FIRST + steps.length) sh.getRange(START_FIRST + steps.length, 1, MOD_HEAD - START_FIRST - steps.length, 3).clearContent();   // старий низ (крок додався)
   sh.getRange(foot, 1, 2, 1).setValues([['Шаблон безкоштовний і з відкритим кодом (github.com/VladyYerys/monitoring-budgets).'], ['Корисний?']]);
   setF_(sh.getRange(foot + 1, 2), [['=HYPERLINK("' + SUPPORT_URL + '","❤️ Підтримати автора")']]);
   PropertiesService.getDocumentProperties().setProperty('start_day', todayKey_(ss));
@@ -199,8 +202,10 @@ function demoAdd_(ss) {
     add(m + '-25', 42000, 'Зарплата', 'зарплата', 0);
     add(m + '-26', 6000, '🎯 На погашення ліміту', 'відкладено на ліміт', 0);
   });
-  const next = addDays_(lastDayOf_(ym), 1).slice(0, 7);
-  const plans = [[D(next + '-05'), 2400, 'Комуналка', DEMO_TAG + 'комунальні послуги', STATUS_PLAN, '', '', ''],
+  const next = addDays_(lastDayOf_(ym), 1).slice(0, 7), reg = ss.getSheetByName(REG_SHEET);
+  // регулярні: правила на «Регулярних» (плани поставить скрипт); старіша таблиця без аркуша: два плани в журналі
+  const regRules = [[DEMO_TAG + 'Комуналка', 'Комуналка', 2400, 5], [DEMO_TAG + 'Підписка', 'Підписки', 299, 12]].filter(r => cats.has(r[1]));
+  const plans = reg ? [] : [[D(next + '-05'), 2400, 'Комуналка', DEMO_TAG + 'комунальні послуги', STATUS_PLAN, '', '', ''],
     [D(next + '-12'), 299, 'Підписки', DEMO_TAG + 'стрімінг', STATUS_PLAN, '', '', '']].filter(r => cats.has(r[2]));
   const all = ops.concat(plans), sh = ss.getSheetByName(JOURNAL), rows = readJournal_(ss);
   let lastUsed = -1;
@@ -216,8 +221,14 @@ function demoAdd_(ss) {
     const i = dv.findIndex(r => String(r[0]).trim() === p[0]);
     if (i >= 0 && (dv[i][5] === '' || dv[i][5] === null)) { d.getRange(D_FIRST + i, 6).setValue(p[1]); state.plans.push(D_FIRST + i); }
   });
+  if (reg && regRules.length) {
+    const v = reg.getRange(REG_FIRST, 1, REG_LAST - REG_FIRST + 1, 1).getValues();
+    let k = 0;
+    v.forEach((r, i) => { if (k < regRules.length && String(r[0]).trim() === '') { const x = regRules[k++]; reg.getRange(REG_FIRST + i, 1, 1, 9).setValues([[x[0], x[1], x[2], x[3], REG_PER[0], '', '', '', MOD_YES]]); } });
+  }
   dp.setProperty('demo', JSON.stringify(state));
   sortCore_(ss);
+  if (reg) regPlansSync_(ss);
   return { rows: fit.length };
 }
 
@@ -236,9 +247,16 @@ function demoClear_(ss) {
     v.forEach((r, i) => { if (dateKey_(r[0], tz) === state.cp && Number(r[1]) === -15000) cp.getRange(CP_FIRST + i, 1, 1, 3).setValues([['', '', '']]); });
   }
   (state.plans || []).forEach(r => ss.getSheetByName(DICT_SHEET).getRange(r, 6).setValue(''));
+  const reg = ss.getSheetByName(REG_SHEET);
+  if (reg) {
+    reg.getRange(REG_FIRST, 1, REG_LAST - REG_FIRST + 1, 1).getValues().forEach((r, i) => {
+      if (String(r[0]).indexOf(DEMO_TAG) === 0) reg.getRange(REG_FIRST + i, 1, 1, REG_COLS.length).setValues([REG_COLS.map(() => '')]);
+    });
+  }
   if (state.start) ss.getSheetByName(SETTINGS_SHEET).getRange(SET.start).setValue(Utilities.parseDate(state.start, tz, 'yyyy-MM-dd'));
   dp.deleteProperty('demo');
   sortCore_(ss);
+  if (reg) regPlansSync_(ss);                                       // плани демо-правил теж геть
   return n;
 }
 
