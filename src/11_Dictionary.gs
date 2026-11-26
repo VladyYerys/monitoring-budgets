@@ -108,6 +108,7 @@ function buildSettings_(ss) {
     .setFontColor('#5f6368');
   settingsFamily_(sh);
   settingsExtra_(sh);
+  settingsRules_(sh);
   const r = Number(SET_MARK_CELL.slice(1));
   sh.getRange(SET_MARK_CELL).setValue(TEMPLATE_MARK).setFontColor('#ffffff');   // мітка шаблону (див. 01_Guard.gs)
   sh.hideRows(r, 1);
@@ -140,6 +141,39 @@ function settingsExtra_(sh) {
     ['Нагадування «❤️ Підтримати автора» (раз після першого місяця й рядок у підсумку місяця раз на квартал)', 'так']]);
   sh.getRange(SET.advisor).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(ADV_LEVELS).setAllowInvalid(false).build());
   sh.getRange(SET.support).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(['так', 'ні']).setAllowInvalid(false).build());
+}
+
+const ADV_PRIO = ['не вказано', 'закрити кредитний ліміт без комісії до строку грейсу', 'зібрати подушку безпеки', 'швидше закрити борги й розстрочки',
+  'відкладати на мету чи велику покупку'];
+const ADV_RULES_HEAD = 'Мої правила для радника Gemini', ADV_RULES_MAX = 500;
+/** Рядки 26…33: «Мої правила для радника Gemini» (щодня йдуть у знімок, розділ «Мої правила»). Ваші значення не змінюються. */
+function settingsRules_(sh) {
+  sh.getRange(26, 1).setValue(ADV_RULES_HEAD).setFontWeight('bold');
+  sh.getRange(27, 1, 6, 2).setValues([
+    ['Мій пріоритет №1', ADV_PRIO[0]],
+    ['Подушка: відкладати від кожного доходу, % (0: не відкладаю)', 0],
+    ['Не опускатися нижче (запас на картці), ₴ (0: без запасу)', 0],
+    ['Розстрочки й кредити: обов\'язкові платежі (так / ні)', 'так'],
+    ['ФОП: відкладати з доходу ФОП на податки, % (0: як за планом «ФОП»)', 0],
+    ['Ще мої правила (вільний текст, до ' + ADV_RULES_MAX + ' знаків)', ''],
+  ]);
+  const list = l => SpreadsheetApp.newDataValidation().requireValueInList(l).setAllowInvalid(false).build();
+  const pct = () => SpreadsheetApp.newDataValidation().requireNumberBetween(0, 1).setAllowInvalid(false).build();
+  sh.getRange(SET.prio).setDataValidation(list(ADV_PRIO));
+  sh.getRange(SET.debtsMust).setDataValidation(list(['так', 'ні']));
+  [SET.cushion, SET.fopPct].forEach(a => sh.getRange(a).setNumberFormat('0%').setDataValidation(pct()));
+  sh.getRange(SET.floor).setNumberFormat('#,##0');
+  sh.getRange(SET.rules).setWrap(true);
+  sh.getRange(33, 1).setValue('Ці рядки щодня потрапляють у знімок для Gemini (розділ «Мої правила»). Без номерів карток, IBAN, паролів і токенів: довгі числа в знімку стають «…». ' +
+    'Заповнити зручніше в «🚀 Підключення», крок 4.').setFontColor('#5f6368');
+}
+
+/** Оновлення наявних «Налаштувань» (версія 11): блок «Мої правила», якщо його ще немає. */
+function settingsRulesUpgrade_(ss) {
+  const sh = ss.getSheetByName(SETTINGS_SHEET);
+  if (!sh || String(sh.getRange('A26').getValue()) === ADV_RULES_HEAD) return [];
+  settingsRules_(sh);
+  return ['блок «' + ADV_RULES_HEAD + '» на «' + SETTINGS_SHEET + '»'];
 }
 
 /** Оновлення наявних «Налаштувань» (версія 6): ставка комісії, радник, нагадування. Ваші значення не змінюються. */

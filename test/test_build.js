@@ -24,7 +24,7 @@ t('all sheets, the empty starter sheet removed, marked as template, success dial
   assert.strictEqual(env.docProps.getProperty('mbs'), 'monitoring-budgets-template');
   assert.strictEqual(env.docProps.getProperty('schema_v'), String(env.ctx.schemaLast_()));
   assert.strictEqual(env.ss.getSheetByName('Налаштування').getRange('A40').getValue(), 'monitoring-budgets-template');
-  const dlg = env.calls.dialogs.pop(); assert.ok(/Шаблон готовий/.test(dlg.t) && /версію <b>10<\/b>/.test(dlg.html), dlg.t + dlg.html);
+  const dlg = env.calls.dialogs.pop(); assert.ok(/Шаблон готовий/.test(dlg.t) && new RegExp('версію <b>' + env.ctx.schemaLast_() + '</b>').test(dlg.html), dlg.t + dlg.html);
   assert.strictEqual(env.files.length, 0, 'у порожній таблиці копія перед змінами не потрібна');
 });
 

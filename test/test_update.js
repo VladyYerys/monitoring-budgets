@@ -67,6 +67,8 @@ function oldCopy() {
   c.debtsPlansSync_(env.ss);                                            // плани боргу вже в журналі старої копії
   env.ss.getSheetByName('Налаштування').getRange('B10').setValue(0.02);
   env.ss.getSheetByName('Налаштування').getRange('B24').setValue('ні');
+  env.ss.getSheetByName('Налаштування').getRange('B28').setValue(0.1);
+  env.ss.getSheetByName('Налаштування').getRange('B32').setValue('на подарунки не більше 3 000 ₴');
   const j = env.ss.getSheetByName('Журнал');
   j.getRange('Y5:AA5').setValues([['bank-op-1', 'Опис з банку', -250]]);
   env.ss.getSheetByName('Історія місяців').getRange('A4:B4').setValues([['2026-10', 13402]]);
@@ -91,6 +93,7 @@ t('move data: journal with bank fields, dictionary, rules, settings by label, de
   assert.strictEqual(set.getRange('B13').getValue(), 'сім\'я'); assert.strictEqual(set.getRange('B14').getValue(), 'Олена');
   assert.strictEqual(set.getRange('B7').getValue(), 'дебетова'); assert.strictEqual(set.getRange('B5').getValue(), 20);
   assert.strictEqual(set.getRange('B10').getValue(), 0.02); assert.strictEqual(set.getRange('B24').getValue(), 'ні');
+  assert.strictEqual(set.getRange('B28').getValue(), 0.1, 'мої правила: подушка'); assert.strictEqual(set.getRange('B32').getValue(), 'на подарунки не більше 3 000 ₴');
   assert.strictEqual(set.getRange('B9').getValue(), K(c, 'TEMPLATE_VERSION'), 'версію не переносимо');
   const mods = JSON.parse(env.docProps.getProperty('mods'));
   assert.strictEqual(mods.debts, true, 'модулі за назвою'); assert.strictEqual(mods.credit, false); assert.strictEqual(mods.tg, true);

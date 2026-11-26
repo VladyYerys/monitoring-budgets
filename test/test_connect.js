@@ -37,6 +37,10 @@ t('menu: «🚀 Підключення» opens the panel; no «⚙️ Налаш
     .forEach(fn => { assert.ok(html.indexOf("'" + fn + "'") >= 0, fn); assert.strictEqual(typeof c[fn], 'function', fn); });
   (html.match(/run\('(cn\w+)'/g) || []).map(x => x.slice(5, -1)).forEach(fn => assert.strictEqual(typeof c[fn], 'function', fn));
   assert.ok(!/^function /m.test(html), 'функції панелі з відступом: не плутаються з функціями скрипта');
+  assert.doesNotThrow(() => new vm.Script(html.split('<script>')[1].split('</script>')[0]), 'скрипт панелі без синтаксичних помилок');
+  (html.match(/google\.script\.run(?:\.with\w+\([^)]*\))*\.(\w+)\(/g) || []).map(x => x.match(/\.(\w+)\($/)[1]).filter(fn => !/^with/.test(fn))
+    .forEach(fn => assert.strictEqual(typeof c[fn], 'function', 'з панелі: ' + fn));
+  ['id="ap"', 'id="ac"', 'id="af"', 'id="ad"', 'id="ao"', 'id="ar"', 'Скопіювати для Gemini', 'advSkillCopied'].forEach(x => assert.ok(html.indexOf(x) >= 0, x));
 });
 
 t('step 1, Mono: token checked without saving; picked accounts saved (main card + FOP), card type and modules from the bank, schedule on; token never in cells or panel state', () => {

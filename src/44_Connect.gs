@@ -11,7 +11,7 @@
  *      натискання (getUpdates) і надсилає перше повідомлення. Окремий QR для сімейної групи (startgroup).
  *   3. 🔁 Регулярні: пошук повторюваних платежів і надходжень в операціях (журнал; з Mono ще й виписка за 2 місяці
  *      без запису в журнал) → галочки → аркуш «Регулярні». Свій платіж: форма.
- *   4. 🤖 Gemini: знімок на Диску, посилання на Gemini, назва, опис і інструкція навички для копіювання.
+ *   4. 🤖 Gemini: «Мої правила», знімок на Диску й одне повідомлення для чату Gemini (Gemini сам створює навичку); запасний шлях: поля навички й SKILL.md.
  * Токени, як і раніше, лише в UserProperties вашого акаунта; у панель вони назад не повертаються.
  * Режим «я сам / сім'я» і учасники: перемикач угорі панелі. Модулі вмикаються самі за підключеним (змінити: «Старт»).
  */
@@ -64,7 +64,8 @@ function cnState() {
     qrBotFather: qrSvg_(CN_BOTFATHER, 132),
     reg: { items: reg.map(r => ({ name: r.name, cat: r.cat, amount: r.amt, day: r.day, per: r.per, on: r.on, state: String((regState[r.i] || [''])[0]) })) },
     cats: cnCats_(ss),
-    adv: { on: modOn_('advisor'), doc: doc ? doc.getUrl() : '', t: dp.getProperty('adv_t') || '' },
+    adv: { on: modOn_('advisor'), doc: doc ? doc.getUrl() : '', t: dp.getProperty('adv_t') || '', rules: advRules_(ss), prio: ADV_PRIO, max: ADV_RULES_MAX,
+      v: ADV_SKILL.v, copied: Number(dp.getProperty('adv_skill_v') || 0), old: advSkillOld_(), fop: modOn_('fop'), credit: modOn_('credit') },
     demo: !!jsonProp_(dp, 'demo'), empty: !readJournal_(ss).some(o => !o.blank), done: !!dp.getProperty('wiz_done'),
     links: { mono: CN_MONO, botfather: CN_BOTFATHER, gemini: CN_GEMINI },
   };
@@ -328,13 +329,14 @@ function cnRegAdd(list) {
 
 /* ---------- 4. Gemini ---------- */
 
-/** Знімок для радника на вашому Диску й текст навички. */
-function cnAdvisor() {
+/** «Мої правила» (якщо передані) → знімок на вашому Диску → одне повідомлення для чату Gemini (і запасні поля навички). */
+function cnAdvisor(rules) {
   const ss = cnSs_();
+  if (rules) advRulesSave_(ss, rules);
   if (!modOn_('advisor')) modSet_(ss, 'advisor', true);                  // знімок пишемо нижче самі
   const r = snapshotWrite_(ss);
-  return { doc: r.url, docName: ADV_DOC, chars: r.chars, title: ADV_SKILL.title, description: ADV_SKILL.description, instructions: advSkillInstructions_(),
-    starters: ADV_SKILL.starters, gemini: CN_GEMINI, skillFile: REPO_URL + '/blob/main/gemini/' + ADV_SKILL.name + '/SKILL.md' };
+  return { doc: r.url, docName: ADV_DOC, chars: r.chars, msg: advSkillMsg_(), title: ADV_SKILL.title, description: ADV_SKILL.description, instructions: advSkillInstructions_(),
+    starters: ADV_SKILL.starters, gemini: CN_GEMINI, skillFile: REPO_URL + '/blob/main/gemini/' + ADV_SKILL.name + '/SKILL.md', v: ADV_SKILL.v, rules: advRules_(ss) };
 }
 
 /* ---------- кінець і демо ---------- */

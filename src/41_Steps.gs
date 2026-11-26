@@ -30,6 +30,8 @@ const STEPS = [
     done: ss => [DASH_SHEET, MOB_SHEET].every(n => !!ss.getSheetByName(n)) && !ss.getSheetByName(PHONE_SHEET) && !chartsDataOld_(ss) },
   { v: 10, title: '🗂 На виду лише «Старт», «Журнал», «Регулярні», «Charts» і «charts_mob»; приклади регулярних платежів і боргів', auto: ss => stepVisible_(ss),
     done: ss => (!startHasModules_(ss) || modBlockFull_(ss)) && (!ss.getSheetByName(REG_SHEET) || !!PropertiesService.getDocumentProperties().getProperty('reg_ex')) },
+  { v: 11, title: '🤖 «Мої правила» для радника Gemini на «Налаштуваннях»; навичка Gemini версії ' + ADV_SKILL.v, auto: ss => stepRules_(ss),
+    done: ss => !ss.getSheetByName(SETTINGS_SHEET) || String(ss.getSheetByName(SETTINGS_SHEET).getRange('A26').getValue()) === ADV_RULES_HEAD },
 ];
 /** Остання версія таблиці в цьому коді. */
 function schemaLast_() { return STEPS[STEPS.length - 1].v; }
@@ -186,6 +188,16 @@ function stepVisible_(ss) {
   try { startRefresh_(ss); } catch (e) { /* чекліст оновиться завтра */ }
   return (out.length ? ['Оновлено: ' + out.join(', ') + '.'] : []).concat([modOn_('service') ? 'Усі аркуші видно (так вибрано на «' + START_SHEET + '»).'
     : 'На виду: «' + VISIBLE_SHEETS.join('», «') + '». Решта працює схованою; показати: «' + START_SHEET + '», «' + modName_('service') + '»: так.']);
+}
+
+/** Версія 11: блок «Мої правила» і новий знімок (розділи «Мої правила», «Де що в таблиці»), якщо радник увімкнений. */
+function stepRules_(ss) {
+  const out = settingsRulesUpgrade_(ss).map(x => 'Додано: ' + x + '.');
+  if (modOn_('advisor')) {
+    try { snapshotWrite_(ss); out.push('Знімок для Gemini оновлено.'); } catch (e) { /* знімок оновиться сам уранці */ }
+    out.push('Навичка Gemini тепер версії ' + ADV_SKILL.v + ': скопіюйте її ще раз («🚀 Підключення», крок 4) і заповніть «Мої правила».');
+  }
+  return out;
 }
 
 /** Блок модулів має рядок для кожного модуля (нові модулі дописуються в кінець). */

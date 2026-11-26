@@ -72,8 +72,15 @@ details{margin:8px 0}summary{cursor:pointer;color:#5f6368}
 <button class="pri" onclick="go(4)">Далі</button></div></div>
 
 <div class="step" id="s4"><div class="sh" onclick="toggle(4)"><span class="n">4</span>Передайте Gemini<span class="st" id="st4"></span></div><div class="sb">
-<p class="hint">Знімок фінансів ляже на ваш Диск і оновлюватиметься щодня. Gemini читає його, лише коли ви питаєте навичку. Коментарів, карток і токенів у ньому немає.</p>
-<button class="pri" onclick="adv()">Зробити знімок для Gemini</button>
+<p class="hint">Знімок фінансів ляже на ваш Диск і оновлюватиметься щодня. Gemini читає його, лише коли ви питаєте. Коментарів, карток і токенів у ньому немає.</p>
+<p class="t">Мої правила <span class="hint">(необов'язково; щодня йдуть у знімок, навичку перестворювати не треба)</span></p>
+<div class="row"><label style="width:100%">Пріоритет №1<select id="ap" style="width:100%;margin-top:2px"></select></label></div>
+<div class="row"><label>Подушка, % доходу <input type="number" id="ac" min="0" max="100" style="width:58px"></label>
+<label>Запас на картці, ₴ <input type="number" id="af" min="0" style="width:84px"></label></div>
+<div class="row"><label><input type="checkbox" id="ad"> Розстрочки й кредити: обов'язкові платежі</label></div>
+<div class="row hide" id="afop"><label>ФОП: відкладати з доходу ФОП, % <input type="number" id="ao" min="0" max="100" style="width:58px"></label></div>
+<textarea id="ar" style="height:54px;font:12px/1.4 Arial,sans-serif" placeholder="Ще мої правила, наприклад: на подарунки не більше 3 000 ₴ на місяць. Без номерів карток і паролів."></textarea>
+<button class="pri" onclick="adv()">Зберегти й зробити текст для Gemini</button>
 <div id="advres"></div></div></div>
 
 <div id="msg" class="msg"></div>
@@ -111,7 +118,9 @@ details{margin:8px 0}summary{cursor:pointer;color:#5f6368}
     el('st1').innerHTML = b.accounts.length ? h(b.accounts.map(function (a) { return a.name; }).join(', ')) : 'не підключено';
     el('st2').innerHTML = s.tg.connected ? '@' + h(s.tg.bot) + (s.tg.on ? '' : ' (модуль вимкнено)') : s.tg.bot ? 'чекає Start' : 'не підключено';
     el('st3').innerHTML = s.reg.items.length ? s.reg.items.length + ' на аркуші' : 'ще немає';
-    el('st4').innerHTML = done[3] ? 'знімок є' : 'не підключено';
+    el('st4').innerHTML = !done[3] ? 'не підключено' : s.adv.old ? '<span class="warn">нова навичка: скопіюйте ще раз</span>' :
+      s.adv.copied ? 'навичка v' + s.adv.copied : 'знімок є';
+    advFill(s.adv);
     [1, 2, 3, 4].forEach(function (k) { var e = el('s' + k), open = e.className.indexOf('open') >= 0; e.className = 'step' + (done[k - 1] ? ' done' : '') + (open ? ' open' : ''); });
     el('card').value = b.credit ? '1' : '0'; el('bday').value = b.bday; el('sched').checked = b.schedule;
     el('sched').disabled = !(b.mono.length || b.privat.length);
@@ -236,14 +245,38 @@ details{margin:8px 0}summary{cursor:pointer;color:#5f6368}
   }
 
   function area(t) { return '<textarea readonly onclick="this.select()">' + h(t) + '</textarea>'; }
+  var advInit = false;
+  function advFill(a) {
+    el('afop').className = 'row' + (a.fop ? '' : ' hide');
+    if (advInit) return;
+    advInit = true;
+    el('ap').innerHTML = a.prio.map(function (p) { return '<option value="' + h(p) + '">' + h(p) + '</option>'; }).join('');
+    var r = a.rules;
+    el('ap').value = r.prio; el('ac').value = r.cushion ? Math.round(r.cushion * 1000) / 10 : ''; el('af').value = r.floor || '';
+    el('ad').checked = r.debtsMust; el('ao').value = r.fopPct ? Math.round(r.fopPct * 1000) / 10 : ''; el('ar').value = r.rules; el('ar').maxLength = a.max;
+  }
+  function advRules() {
+    return { prio: el('ap').value, cushion: Number(el('ac').value) || 0, floor: Number(el('af').value) || 0, debtsMust: el('ad').checked,
+      fopPct: Number(el('ao').value) || 0, rules: el('ar').value };
+  }
   function adv() {
-    run('cnAdvisor', [], function (r) {
-      el('advres').innerHTML = '<p class="ok">✓ Знімок: <a href="' + h(r.doc) + '">' + h(r.docName) + '</a></p><ol class="how">' +
-        '<li><a href="' + h(r.gemini) + '">Відкрийте Gemini</a> → Skills → Create → Create manually (або Upload <a href="' + h(r.skillFile) + '">SKILL.md</a>).</li>' +
-        '<li>Назва:' + area(r.title) + '</li><li>Опис:' + area(r.description) + '</li><li>Інструкція:' + area(r.instructions) + '</li>' +
-        '<li>У чаті Gemini: «/» і назва навички, далі питання, наприклад: «' + h(r.starters[0]) + '». Google Диск у Gemini має бути підключений.</li></ol>';
+    run('cnAdvisor', [advRules()], function (r) {
+      el('advres').innerHTML = '<p class="ok">✓ Правила збережено. Знімок: <a href="' + h(r.doc) + '">' + h(r.docName) + '</a></p><ol class="how">' +
+        '<li><button class="pri" onclick="cpMsg()">📋 Скопіювати для Gemini</button> <span id="cpok"></span></li>' +
+        '<li><a href="' + h(r.gemini) + '">Відкрийте Gemini</a>, вставте в чат і надішліть: Gemini сам створить навичку «' + h(r.title) + '».</li>' +
+        '<li>Далі просто питайте в будь-якому чаті Gemini, наприклад: «' + h(r.starters[0]) + '». Google Диск у Gemini має бути підключений.</li></ol>' +
+        '<textarea id="advmsg" readonly onclick="this.select()">' + h(r.msg) + '</textarea>' +
+        '<details><summary>Інакше: створити вручну або з файла</summary><p class="hint">Gemini → Skills → Create → Create manually (поля нижче) або Upload <a href="' +
+        h(r.skillFile) + '">SKILL.md</a>.</p>Назва:' + area(r.title) + 'Опис:' + area(r.description) + 'Інструкція:' + area(r.instructions) + '</details>' +
+        '<p class="hint">Правила можна змінити тут будь-коли: вони йдуть у знімок, а навичка (версія ' + r.v + ') лишається та сама.</p>';
       load();
-    }, '⏳ Роблю знімок…');
+    }, '⏳ Зберігаю й роблю знімок…');
+  }
+  function cpMsg() {
+    var t = el('advmsg');
+    function ok() { el('cpok').innerHTML = '<span class="ok">✓ Скопійовано</span>'; google.script.run.withSuccessHandler(load).advSkillCopied(); }
+    function fb() { t.select(); var d = false; try { d = document.execCommand('copy'); } catch (e) { d = false; } if (d) ok(); else el('cpok').innerHTML = 'Виділено: натисніть Cmd+C або Ctrl+C'; }
+    try { navigator.clipboard.writeText(t.value).then(ok, fb); } catch (e) { fb(); }
   }
   function demo() { run('cnDemo', [!S.demo], render, S.demo ? '⏳ Прибираю демо…' : '⏳ Додаю демо-місяць…'); }
   function finish() {

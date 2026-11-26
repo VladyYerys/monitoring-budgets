@@ -167,7 +167,7 @@ t('upgrade of a version-8 table to 9: backup first, «Charts» and «charts_mob�
   env.docProps.setProperty('schema_v', '8');
   const f0 = env.files.length;
   assert.strictEqual(c.schemaTick_(ss), true);
-  assert.strictEqual(env.docProps.getProperty('schema_v'), '10');
+  assert.strictEqual(env.docProps.getProperty('schema_v'), String(c.schemaLast_()));
   assert.strictEqual(env.files.length, f0 + 1, 'копія перед змінами');
   assert.ok(!ss.getSheetByName('📱 Телефон'));
   assert.strictEqual(d.getRange('A1').getValue(), 'Показник', '«Дані графіків» нової будови');
@@ -187,7 +187,7 @@ t('upgrade of a version-9 table to 10: module «🗂 Службові аркуш
   ['Місяці', 'Дні', 'Довідник', 'Налаштування'].forEach(n => ss.getSheetByName(n).showSheet());
   env.docProps.setProperty('schema_v', '9');
   assert.strictEqual(c.schemaTick_(ss), true);
-  assert.strictEqual(env.docProps.getProperty('schema_v'), '10');
+  assert.strictEqual(env.docProps.getProperty('schema_v'), String(c.schemaLast_()));
   assert.strictEqual(st(env).getRange(row, 1).getValue(), '🗂 Усі аркуші');
   assert.strictEqual(st(env).getRange(row, 2).getValue(), 'ні', 'ваш вибір лишився');
   assert.ok(/Довідник/.test(st(env).getRange(row, 3).getValue()));
