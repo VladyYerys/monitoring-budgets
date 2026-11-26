@@ -54,9 +54,11 @@ function journalFormulas_() {
 
 function buildJournal_(ss) {
   const sh = ensureSize_(sheetOf_(ss, JOURNAL), J_LAST, colNum_(J_SERVICE_LAST));
-  sh.getRange(1, 1).setValue('📒 Журнал').setFontWeight('bold').setFontSize(14);
-  sh.getRange(2, 1).setValue('Пишіть у рядки нижче: дата, сума (завжди додатна), категорія зі списку, статус. Решту рахують формули. ' +
-    'Сірі колонки праворуч службові: не правте.').setFontColor('#5f6368');
+  if (!headerIsNew_(ss)) {                                         // нова шапка (25_Header.gs) замінює заголовок і підказку
+    sh.getRange(1, 1).setValue('📒 Журнал').setFontWeight('bold').setFontSize(14);
+    sh.getRange(2, 1).setValue('Пишіть у рядки нижче: дата, сума (завжди додатна), категорія зі списку, статус. Решту рахують формули. ' +
+      'Сірі колонки праворуч службові: не правте.').setFontColor('#5f6368');
+  }
   const last = colNum_(J_SERVICE_LAST);
   const heads = [];
   for (let c = 1; c <= last; c++) heads.push(J_HEADERS[colStr_(c)] || '');

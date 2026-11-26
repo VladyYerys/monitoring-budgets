@@ -158,7 +158,7 @@ t('upgrade of a version-5 table to 6: backup, modules from what already works (c
   env.ss.getSheetByName('Журнал').getRange('A9:E9').setValues([[new Date(), 250, 'Продукти', 'мій рядок', '✅ факт']]);
   const files0 = env.files.length;
   assert.strictEqual(c.schemaTick_(env.ss), true);
-  assert.strictEqual(env.docProps.getProperty('schema_v'), '6');
+  assert.strictEqual(env.docProps.getProperty('schema_v'), String(c.schemaLast_()));
   assert.strictEqual(env.files.length, files0 + 1, 'копія перед змінами');
   assert.ok(env.ss.getSheetByName('Борги'));
   const v = st(env).getRange('A26:B33').getValues(), mod = name => v.find(r => r[0] === name)[1];

@@ -119,6 +119,7 @@ const MOD_APPLY = {
     const d = ss.getSheetByName(DAYS_SHEET), m = ss.getSheetByName(MONTHS_SHEET);
     if (d) { if (on) d.showColumns(6, 3); else d.hideColumns(6, 3); }
     if (m) monthsCreditRows_().forEach(g => { if (on) m.showRows(g[0], g[1]); else m.hideRows(g[0], g[1]); });
+    if (headerIsNew_(ss)) journalHeader_(ss);                       // шапка: грейс або «на день»
     return on ? 'увімкнено ✓' + (cardIsCredit_(ss) ? '' : ' (на «' + SETTINGS_SHEET + '» картка дебетова: ліміт буде 0)') : 'вимкнено: рядки ліміту й грейсу сховано';
   },
   debts: (ss, on) => {
@@ -128,7 +129,10 @@ const MOD_APPLY = {
     const st = debtsPlansSync_(ss);
     return (on ? 'увімкнено ✓: аркуш «' + DEBTS_SHEET + '»' : 'вимкнено: аркуш сховано') + (st.added + st.removed ? ', планів у журналі +' + st.added + ' −' + st.removed : '');
   },
-  budgets: (ss, on) => (on ? 'увімкнено ✓' : 'вимкнено: тривог про бюджети не буде (плани категорій у «' + DICT_SHEET + '» лишаються для «' + MONTHS_SHEET + '»)'),
+  budgets: (ss, on) => {
+    if (headerIsNew_(ss)) journalHeader_(ss);                       // шапка: три бюджети або витрати місяця
+    return on ? 'увімкнено ✓' : 'вимкнено: тривог про бюджети не буде (плани категорій у «' + DICT_SHEET + '» лишаються для «' + MONTHS_SHEET + '»)';
+  },
   cal: (ss, on, was) => {
     if (!on) return 'вимкнено: календар більше не оновлюється (сам календар лишився; видалити: «⚙️ Налаштування → 📆 Календар платежів: вимкнути»)';
     if (was === true) return 'увімкнено ✓';

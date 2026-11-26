@@ -20,7 +20,7 @@ t('all sheets, the empty starter sheet removed, marked as template, success dial
   assert.strictEqual(env.docProps.getProperty('mbs'), 'monitoring-budgets-template');
   assert.strictEqual(env.docProps.getProperty('schema_v'), String(env.ctx.schemaLast_()));
   assert.strictEqual(env.ss.getSheetByName('Налаштування').getRange('A40').getValue(), 'monitoring-budgets-template');
-  const dlg = env.calls.dialogs.pop(); assert.ok(/Шаблон готовий/.test(dlg.t) && /версію <b>6<\/b>/.test(dlg.html), dlg.t + dlg.html);
+  const dlg = env.calls.dialogs.pop(); assert.ok(/Шаблон готовий/.test(dlg.t) && /версію <b>7<\/b>/.test(dlg.html), dlg.t + dlg.html);
   assert.strictEqual(env.files.length, 0, 'у порожній таблиці копія перед змінами не потрібна');
 });
 
@@ -37,7 +37,7 @@ t('journal: headers, formulas in every row 5…3004, lists for status / category
   assert.ok(j.hidden.some(h => h[0] === 12 && h[1] === 23));                        // L…AH
   assert.strictEqual(j.getRange('Y4').getValue(), 'Банк: номер операції');
   assert.strictEqual(j.getRange('AE4').getValue(), 'Черговість запису (службовий)');
-  assert.ok(j.cf.length >= 5 && j.cf.every(r => !/,/.test(r.spec.formula.replace(/"[^"]*"/g, ''))), 'кольори без ком: працюють у будь-якому регіоні');
+  assert.ok(j.cf.length >= 5 && j.cf.every(r => !r.spec.formula || !/,/.test(r.spec.formula.replace(/"[^"]*"/g, ''))), 'кольори без ком: працюють у будь-якому регіоні');
 });
 
 t('dictionary: neutral starter set, types and «мої гроші» flags, holes and reasons', () => {
@@ -105,7 +105,7 @@ t('rules, bank log, main (labels the bot reads), checks, charts, schedules, prot
   ['Доступно моїх сьогодні', 'Можна на день', 'На картці зараз', 'Прогноз на кінець місяця (за планом)', 'Чернеток чекають підтвердження', 'Межа «близько до ліміту»']
     .forEach(l => assert.ok(labels.indexOf(l) >= 0, l));
   assert.strictEqual(main.charts.length, 2);
-  assert.ok(/Доступно моїх сьогодні/.test(env.ss.getSheetByName('Журнал').getRange('A3').getFormula()));
+  assert.ok(/Доступно моїх сьогодні/.test(env.ss.getSheetByName('Журнал').getRange('B1').getFormula()));
   const chk = env.ss.getSheetByName('Перевірка');
   assert.ok(/ПЕРЕВІРИТИ/.test(chk.getRange('B2').getFormula()) && chk.getRange('B5').getFormula());
   const h = env.triggers.map(t => t.getHandlerFunction()).sort();

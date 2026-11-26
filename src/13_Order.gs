@@ -105,6 +105,7 @@ function mbsTick() {
   try { startIfDue_(ss); } catch (e) { /* чекліст: наступного разу */ }
   try { advisorIfDue_(ss); } catch (e) { /* знімок: помилка в adv_err */ }
   try { verIfDue_(ss); } catch (e) { /* перевірка версії: завтра */ }
+  try { headerIfDue_(ss); } catch (e) { /* шапка: завтра */ }
 }
 
 function sortNow() {

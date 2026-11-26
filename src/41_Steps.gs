@@ -23,6 +23,7 @@ const STEPS = [
     done: ss => !!ss.getSheetByName(DEBTS_SHEET) && startHasModules_(ss) && !!PropertiesService.getDocumentProperties().getProperty('mods') &&
       mainHasLabel_(ss, 'Грейс: строк') &&
       String(ss.getSheetByName(SETTINGS_SHEET).getRange('A22').getValue()) === 'Радник і нагадування' },
+  { v: 7, title: '🧭 Шапка журналу: мої, бюджети зі смужками, прогноз, грейс', auto: ss => stepHeader_(ss), done: ss => headerIsNew_(ss) },
 ];
 /** Остання версія таблиці в цьому коді. */
 function schemaLast_() { return STEPS[STEPS.length - 1].v; }
@@ -106,6 +107,13 @@ function stepModules_(ss) {
   if (PropertiesService.getDocumentProperties().getProperty('prot') !== 'off' && modOn_('backup')) applyProtection_(ss);
   const lines = modulesApply_(ss, true);
   return (out.length ? ['Додано: ' + out.join(', ') + '.'] : ['Усе вже було.']).concat(lines);
+}
+
+/** Версія 7: нова шапка журналу (рядки 1…3) і службові колонки «Довідника» M…U. Дані журналу не змінюються. */
+function stepHeader_(ss) {
+  if (!ss.getSheetByName(JOURNAL) || !ss.getSheetByName(MAIN_SHEET)) return ['Журналу чи «Головного» ще немає: шапку додасть збирання таблиці.'];
+  journalHeader_(ss);
+  return ['Шапка журналу: мої й картка, три найгірші бюджети зі смужкою, наступний місяць, ' + (modOn_('credit') ? 'грейс' : 'на день') + '; «№ … ↓» веде на рядок для вводу.'];
 }
 
 function mainHasLabel_(ss, label) {

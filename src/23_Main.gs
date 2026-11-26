@@ -146,14 +146,3 @@ function mainCharts_(ss, sh) {
   sh.insertChart(months);
 }
 
-/** Шапка над журналом (рядок 3): мої, на день, на картці, прогноз, чернетки. */
-function journalHeader_(ss) {
-  const j = ss.getSheetByName(JOURNAL);
-  if (!j) return;
-  const g = l => 'N(INDEX(\'' + MAIN_SHEET + '\'!$B$1:$B$120,MATCH("' + l + '",\'' + MAIN_SHEET + '\'!$A$1:$A$120,0)))';
-  const f = '=IFERROR("💚 Мої: "&ROUND(' + g('Доступно моїх сьогодні') + ')&" ₴ · на день ≈ "&ROUND(' + g('Можна на день') + ')&" ₴ · 💳 на картці "&ROUND(' +
-    g('На картці зараз') + ')&" ₴ · 📅 на кінець місяця за планом "&ROUND(' + g('Прогноз на кінець місяця (за планом)') + ')&" ₴ · 🏦 чернеток "&' +
-    g('Чернеток чекають підтвердження') + ',"")';
-  setF_(j.getRange(3, 1), [[f]]);
-  j.getRange(3, 1).setFontWeight('bold');
-}
