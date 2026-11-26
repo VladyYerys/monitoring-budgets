@@ -39,7 +39,7 @@ t('«🚀 Підключення» in an empty table: builds, opens the side pan
   const mod = name => st.getRange('A26:B34').getValues().find(r => r[0] === name)[1];
   assert.strictEqual(mod('💳 Кредитний ліміт і грейс'), 'ні', 'дебетова картка: без ліміту');
   assert.strictEqual(mod('🧾 ФОП'), 'так'); assert.strictEqual(mod('🤝 Борги й розстрочки'), 'ні'); assert.strictEqual(mod('💾 Копії й захист'), 'так');
-  assert.strictEqual(env.ss.getSheetByName('ФОП').isSheetHidden(), false, 'ФОП є: аркуш видно');
+  assert.ok(env.ss.getSheetByName('ФОП') && env.ss.getSheetByName('ФОП').isSheetHidden(), 'ФОП є: аркуш є, схований разом з рештою');
   assert.strictEqual(env.ss.getSheetByName('Борги').isSheetHidden(), true, 'борги вимкнено: аркуш сховано');
   assert.strictEqual(JSON.parse(env.docProps.getProperty('mods')).credit, false);
   assert.ok(env.docProps.getProperty('fop_day'), 'модуль ФОП застосовано: плани податків синхронізовано');

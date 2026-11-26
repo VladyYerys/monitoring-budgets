@@ -19,7 +19,8 @@ function toggle(env, id, v) {
 }
 const titles = sh => (sh.charts || []).map(ch => ch.opts.title);
 const by = (sh, s) => sh.charts.find(ch => ch.opts.title.indexOf(s) >= 0);
-const SERVICE = ['Головне', 'Правила', 'Рахунки', 'Залишки банку', 'Банк', 'Історія місяців', 'Історія категорій', 'Перевірка'];
+const SERVICE = ['Місяці', 'Дні', 'Довідник', 'Налаштування', 'Головне', 'Правила', 'Рахунки', 'Залишки банку', 'Банк', 'Історія місяців', 'Історія категорій', 'Перевірка'];
+const VISIBLE = ['Старт', 'Журнал', 'Регулярні', 'Charts', 'charts_mob'];
 
 t('«Дані графіків»: hidden; key figures by name; categories, «що зросло», groups, types, 60 days, pace, forecast, holes with limits from «Charts», reasons', () => {
   const env = setup(), c = env.ctx, d = env.ss.getSheetByName('Дані графіків');
@@ -132,16 +133,23 @@ t('credit module off → no limit tiles, charts or reasons (8 + 6 charts); on �
   assert.strictEqual(sh.getMaxRows(), 221);
 });
 
-t('module «🗂 Службові аркуші»: off by default (service sheets and «Головне» hidden, they still work), on → shown, off → hidden; «Дані графіків» always hidden', () => {
+t('module «🗂 Усі аркуші»: off by default (only Старт, Журнал, Регулярні, Charts, charts_mob on view; the rest works hidden), on → all shown (ФОП and Борги only with their modules), off → hidden', () => {
   const env = setup();
   const hidden = () => SERVICE.map(s => env.ss.getSheetByName(s).isSheetHidden());
+  const shown = () => env.ss.getSheets().filter(s => !s.isSheetHidden()).map(s => s.getName());
   assert.ok(hidden().every(Boolean));
+  same(shown(), VISIBLE);
+  toggle(env, 'fop', 'так');
+  same(shown(), VISIBLE, 'ФОП увімкнено, але аркуш схований разом з рештою');
   toggle(env, 'service', 'так');
   assert.ok(hidden().every(x => !x));
+  assert.strictEqual(env.ss.getSheetByName('ФОП').isSheetHidden(), false, 'ФОП: модуль увімкнено');
+  assert.strictEqual(env.ss.getSheetByName('Борги').isSheetHidden(), true, 'Борги: модуль вимкнено');
   assert.strictEqual(env.ss.getSheetByName('Дані графіків').isSheetHidden(), true);
   assert.ok(env.ss.getSheetByName('Старт').getRange('A6:C25').getValues().every(r => !/сховано/.test(r[2])), 'підказка «сховано» зникла');
   toggle(env, 'service', 'ні');
   assert.ok(hidden().every(Boolean));
+  same(shown(), VISIBLE);
   env.ctx.startRefresh_(env.ss);
   assert.ok(env.ss.getSheetByName('Старт').getRange('A6:C25').getValues().some(r => /сховано/.test(r[2])), 'де шукати сховане');
 });
@@ -159,7 +167,7 @@ t('upgrade of a version-8 table to 9: backup first, «Charts» and «charts_mob�
   env.docProps.setProperty('schema_v', '8');
   const f0 = env.files.length;
   assert.strictEqual(c.schemaTick_(ss), true);
-  assert.strictEqual(env.docProps.getProperty('schema_v'), '9');
+  assert.strictEqual(env.docProps.getProperty('schema_v'), '10');
   assert.strictEqual(env.files.length, f0 + 1, 'копія перед змінами');
   assert.ok(!ss.getSheetByName('📱 Телефон'));
   assert.strictEqual(d.getRange('A1').getValue(), 'Показник', '«Дані графіків» нової будови');
@@ -168,9 +176,31 @@ t('upgrade of a version-8 table to 9: backup first, «Charts» and «charts_mob�
   same(titles(main), ['Мій графік'], 'наші старі графіки прибрано, ваш лишився');
   assert.strictEqual(main.isSheetHidden(), true, '«Головне» тепер службовий');
   const names = ss.getSheets().map(x => x.getName());
-  same(names.slice(0, 3), ['Старт', 'Charts', 'charts_mob']);
+  same(names.slice(0, 5), VISIBLE);
   assert.ok(names.indexOf('Мій аркуш') > names.indexOf('Дані графіків') && ss.getSheetByName('Мій аркуш').getRange('A1').getValue() === 'моє', 'ваш аркуш на місці');
   assert.strictEqual(c.schemaTick_(ss), false, 'вдруге нічого');
+});
+
+t('upgrade of a version-9 table to 10: module «🗂 Службові аркуші» becomes «🗂 Усі аркуші» with your choice kept; Місяці, Дні, Довідник, Налаштування hidden; order Старт, Журнал, Регулярні, Charts, charts_mob', () => {
+  const env = setup(), c = env.ctx, ss = env.ss, i = K(c, 'MODS').findIndex(m => m.id === 'service'), row = 26 + i;
+  st(env).getRange(row, 1).setValue('🗂 Службові аркуші');
+  ['Місяці', 'Дні', 'Довідник', 'Налаштування'].forEach(n => ss.getSheetByName(n).showSheet());
+  env.docProps.setProperty('schema_v', '9');
+  assert.strictEqual(c.schemaTick_(ss), true);
+  assert.strictEqual(env.docProps.getProperty('schema_v'), '10');
+  assert.strictEqual(st(env).getRange(row, 1).getValue(), '🗂 Усі аркуші');
+  assert.strictEqual(st(env).getRange(row, 2).getValue(), 'ні', 'ваш вибір лишився');
+  assert.ok(/Довідник/.test(st(env).getRange(row, 3).getValue()));
+  same(ss.getSheets().filter(s => !s.isSheetHidden()).map(s => s.getName()), VISIBLE);
+  same(ss.getSheets().map(s => s.getName()).slice(0, 5), VISIBLE);
+  // «так» на старій таблиці: усе видно й після кроку
+  const env2 = setup(), r2 = 26 + K(env2.ctx, 'MODS').findIndex(m => m.id === 'service');
+  toggle(env2, 'service', 'так');
+  st(env2).getRange(r2, 1).setValue('🗂 Службові аркуші');
+  env2.docProps.setProperty('schema_v', '9');
+  env2.ctx.schemaTick_(env2.ss);
+  assert.strictEqual(st(env2).getRange(r2, 2).getValue(), 'так');
+  assert.ok(SERVICE.every(n => !env2.ss.getSheetByName(n).isSheetHidden()));
 });
 
 t('once a day: a renamed group reaches the data; a new «чорна діра» in «Довідник» rebuilds the charts with one more series', () => {

@@ -11,6 +11,9 @@
  * Змінили суму чи день: плани оновлюються. Вимкнули чи видалили правило: його плани зникають. Ваші рядки не чіпає.
  * Минулий план без факту лишається («⚠️ прострочено»); перенесли його на майбутню дату: лишається з вашою датою й сумою.
  * Колонка «Стан» (J) пише скрипт: наступний платіж, сплачено цього місяця, прострочено.
+ * Приклади (REG_EXAMPLES): підписки, оренда, комуналка, бензин, спорт, садок, страховка, подарунки, зарплата, кредит, розстрочка,
+ * борг другу й вам, заощадження, донат. Усі з «Увімкнено: ні», тож планів не ставлять; позначка в примітці колонки A
+ * («💡 Приклад…»), підказка в «Стані». Свій платіж: новий рядок або поправте приклад і поставте «так». Додаються один раз.
  */
 
 const REG_SHEET = 'Регулярні';
@@ -19,6 +22,31 @@ const REG_TAG = '[Регулярний] ';
 const REG_PER = ['щомісяця', 'щокварталу', 'щороку'];
 const REG_CLOSE_DAYS = 5, REG_TOL = 0.25;
 const REG_COLS = ['Назва', 'Категорія', 'Сума, ₴', 'День (1–31)', 'Як часто', 'З (перший платіж)', 'До (порожньо: без кінця)', 'Хто', 'Увімкнено', 'Стан (пише скрипт)'];
+const REG_EX_MARK = '💡 Приклад';
+const REG_HINT = 'Нижче приклади з «Увімкнено: ні»: вони нічого не планують. Свій платіж: новий рядок або поправте приклад (сума, день) і поставте «так». ' +
+  'Непотрібні приклади можна видалити.';
+/** [назва, категорія, сума, день, як часто, місяць «З» від поточного (для щокварталу й щороку), місяців до «До» (0: без кінця), підказка]. */
+const REG_EXAMPLES = [
+  ['Netflix', 'Підписки', 350, 12, 'щомісяця', 0, 0, 'підписка: банк спише, факт закриє план сам'],
+  ['YouTube Premium', 'Підписки', 150, 3, 'щомісяця', 0, 0, 'кожна підписка окремим рядком: видно, скільки всі разом'],
+  ['Хмара для фото', 'Підписки', 100, 20, 'щомісяця', 0, 0, 'дрібні підписки теж: за рік набігає'],
+  ['Мобільний і домашній інтернет', 'Інтернет і зв\'язок', 500, 7, 'щомісяця', 0, 0, ''],
+  ['Оренда квартири', 'Оренда житла', 15000, 1, 'щомісяця', 0, 0, 'велика сума: прогноз у «Днях» покаже, чи вистачить до зарплати'],
+  ['Комуналка', 'Комуналка', 2500, 20, 'щомісяця', 0, 0, 'сума щоразу інша: ставте середню, факт ±25 % закриє план'],
+  ['Бензин', 'Пальне', 3000, 1, 'щомісяця', 0, 0, 'кілька заправок на місяць: краще план «Пальне» в «Довіднику» (F); тут: якщо раз на місяць'],
+  ['Спортзал', 'Спорт', 900, 5, 'щомісяця', 0, 0, ''],
+  ['Садок або гурток', 'Діти', 2000, 10, 'щомісяця', 0, 0, 'у сім\'ї: колонка «Хто» (чий це платіж)'],
+  ['Басейн на 3 місяці', 'Спорт', 2400, 1, 'щокварталу', 0, 0, 'щокварталу: рахується від місяця в колонці «З»'],
+  ['Страховка авто', 'Транспорт', 2500, 15, 'щороку', 2, 0, 'щороку: місяць платежу береться з колонки «З»'],
+  ['День народження мами', 'Подарунки', 2000, 10, 'щороку', 4, 0, 'великі річні витрати не застануть зненацька'],
+  ['Зарплата', 'Зарплата', 40000, 25, 'щомісяця', 0, 0, 'надходження теж: план доходу з\'явиться в «Днях» і прогнозі'],
+  ['Кредит у банку', 'Кредит / розстрочка', 2500, 15, 'щомісяця', 0, 0, 'борг із сумою й залишком краще на «' + DEBTS_SHEET + '» (модуль «🤝 Борги й розстрочки»)'],
+  ['Розстрочка за телефон', 'Кредит / розстрочка', 1500, 3, 'щомісяця', 0, 10, 'з датою «До»: після неї планів не буде'],
+  ['Повертаю борг другу', 'Повернення боргу', 1000, 10, 'щомісяця', 0, 0, 'позика з залишком: аркуш «' + DEBTS_SHEET + '»'],
+  ['Мені повертають борг', 'Мені повернули борг', 1000, 20, 'щомісяця', 0, 0, 'вам винні: це надходження'],
+  ['Відкладаю на заощадження', 'Заощадження', 3000, 26, 'щомісяця', 0, 0, 'відкладати після зарплати: переказ на банку чи депозит'],
+  ['Щомісячний донат', 'Благодійність', 500, 1, 'щомісяця', 0, 0, ''],
+];
 
 function buildRegular_(ss) {
   const sh = ensureSize_(sheetOf_(ss, REG_SHEET), REG_LAST + 3, REG_COLS.length);
@@ -38,18 +66,51 @@ function buildRegular_(ss) {
   sh.getRange('F' + REG_FIRST + ':G' + REG_LAST).setNumberFormat('dd.mm.yyyy');
   rng('J').setFontColor('#5f6368');
   sh.setFrozenRows(REG_HEAD);
-  sh.setColumnWidth(1, 180); sh.setColumnWidth(2, 160); sh.setColumnWidth(10, 220);
+  sh.setColumnWidth(1, 180); sh.setColumnWidth(2, 160); sh.setColumnWidth(10, 320);
+  regExamplesAdd_(ss);
   return sh;
 }
+
+/**
+ * Приклади на «Регулярних» один раз (властивість reg_ex): у перші вільні рядки, «Увімкнено: ні», примітка «💡 Приклад…».
+ * Категорії лише ті, що є в «Довіднику». Місця на всі немає: не додає. → скільки додано.
+ */
+function regExamplesAdd_(ss) {
+  const sh = ss.getSheetByName(REG_SHEET), dp = PropertiesService.getDocumentProperties();
+  if (!sh || dp.getProperty('reg_ex')) return 0;
+  const dict = ss.getSheetByName(DICT_SHEET), cats = new Set(dict ? dict.getRange(D_FIRST, 1, D_LAST - D_FIRST + 1, 1).getValues().map(r => String(r[0]).trim()) : []);
+  const ex = REG_EXAMPLES.filter(x => cats.has(x[1])), n = REG_LAST - REG_FIRST + 1;
+  const v = sh.getRange(REG_FIRST, 1, n, 1).getValues(), free = [];
+  v.forEach((r, i) => { if (String(r[0]).trim() === '') free.push(i); });
+  if (!ex.length || free.length < ex.length) return 0;
+  const tz = ss.getSpreadsheetTimeZone(), ym0 = todayKey_(ss).slice(0, 7);
+  const ymAdd = k => { const t = Number(ym0.slice(0, 4)) * 12 + Number(ym0.slice(5, 7)) - 1 + k; return Math.floor(t / 12) + '-' + pad2_(t % 12 + 1); };
+  const at = (k, day) => { const ym = ymAdd(k); return Utilities.parseDate(ym + '-' + pad2_(Math.min(day, Number(lastDayOf_(ym).slice(8)))), tz, 'yyyy-MM-dd'); };
+  ex.forEach((x, j) => {
+    const i = free[j], per = x[4], from = per === REG_PER[0] && !x[6] ? '' : at(x[5], x[3]), to = x[6] ? at(x[5] + x[6], x[3]) : '';
+    sh.getRange(REG_FIRST + i, 1, 1, 9).setValues([[x[0], x[1], x[2], x[3], per, from, to, '', MOD_NO]]);
+    sh.getRange(REG_FIRST + i, 1).setNote(REG_EX_MARK + ' шаблону' + (x[7] ? ': ' + x[7] : '') + '. Свій: поправте й поставте «так».');
+  });
+  sh.getRange(3, 1).setValue(REG_HINT).setFontColor('#1a73e8').setFontWeight('bold');
+  dp.setProperty('reg_ex', '1');
+  if (ss.getSheetByName(JOURNAL)) regPlansSync_(ss);                // «Стан»: підказки прикладів
+  return ex.length;
+}
+
+/** Ваші правила: без вимкнених прикладів шаблону. */
+function regOwn_(ss) { return regList_(ss).filter(r => r.on || !r.ex); }
 
 /** Правила з аркуша: [{ i, name, cat, amt, day, per, from, to, who, on }]. */
 function regList_(ss) {
   const sh = ss.getSheetByName(REG_SHEET), tz = ss.getSpreadsheetTimeZone();
   if (!sh) return [];
+  const notes = sh.getRange(REG_FIRST, 1, REG_LAST - REG_FIRST + 1, 1).getNotes();
   return sh.getRange(REG_FIRST, 1, REG_LAST - REG_FIRST + 1, 9).getValues().map((r, i) => ({
     i: i, name: String(r[0]).trim(), cat: String(r[1]).trim(), amt: Number(r[2]) || 0, day: Math.max(1, Math.min(31, Math.round(Number(r[3]) || 1))),
     per: REG_PER.indexOf(String(r[4]).trim()) >= 0 ? String(r[4]).trim() : REG_PER[0], from: dateKey_(r[5], tz) || '', to: dateKey_(r[6], tz) || '',
     who: String(r[7] || '').trim(), on: String(r[8]).trim() !== 'ні',
+    ex: String(notes[i][0] || '').indexOf(REG_EX_MARK) === 0 && REG_EXAMPLES.some(x => x[0] === String(r[0]).trim()),   // перейменували: уже ваш
+    hint: String(notes[i][0] || '').replace(/^💡 Приклад шаблону:?\s*/, '').replace(/\s*Свій: поправте й поставте «так»\.$/, '').replace(/\.$/, ''),
   })).filter(x => x.name && x.cat && x.amt > 0);
 }
 
@@ -129,7 +190,7 @@ function regPlansSync_(ss) {
   const col = [];
   for (let i = 0; i <= REG_LAST - REG_FIRST; i++) {
     const rule = rules.find(x => x.i === i), s = rule && w.state[i];
-    col.push([!rule ? '' : !rule.on ? 'вимкнено' : (s.over ? '⚠️ прострочено ' + dm(s.over) + '; ' : '') +
+    col.push([!rule ? '' : !rule.on ? (rule.ex ? '💡 приклад, «ні»: ' + (rule.hint || 'поставте «так», і він стане планом') : 'вимкнено') : (s.over ? '⚠️ прострочено ' + dm(s.over) + '; ' : '') +
       (s.paidYm === today.slice(0, 7) ? '✓ цього місяця сплачено' + (s.next ? '; ' : '') : '') + (s.next ? 'наступний ' + dm(s.next) : s.paidYm === today.slice(0, 7) ? '' : 'планів до ' + dm(horizon) + ' немає')]);
   }
   sh.getRange(REG_FIRST, 10, col.length, 1).setValues(col);

@@ -30,17 +30,17 @@ function startSteps_(ss) {
   const hid = modOn_('service') ? '' : ' (сховано: «' + modName_('service') + '»: так)';
   return [
     [!!dp.getProperty('wiz_done'), '«🚀 Підключення» пройдено (кнопка «Готово»)', 'меню «📊 ' + APP_NAME + ' → 🚀 Підключення»'],
-    [!!(set && set.getRange(SET.start).getValue()), 'Старт обліку «моїх грошей», вид картки, день доходу', 'аркуш «' + SETTINGS_SHEET + '»'],
-    [fam ? members_(ss).length >= 2 : null, 'Учасники сім\'ї (до 5)', '«' + SETTINGS_SHEET + '», блок «Сім\'я»'],
+    [!!(set && set.getRange(SET.start).getValue()), 'Старт обліку «моїх грошей», вид картки, день доходу', '«🚀 Підключення» або аркуш «' + SETTINGS_SHEET + '»' + hid],
+    [fam ? members_(ss).length >= 2 : null, 'Учасники сім\'ї (до 5)', '«🚀 Підключення» («Сім\'я») або «' + SETTINGS_SHEET + '»' + hid],
     [accs.length > 0, 'Банк: Mono, ПриватБанк для ФОП або виписка', '«🚀 Підключення», крок 1'],
     [up.getProperty('mono_token') || up.getProperty('pb_token') ? has(TRG.imp) : null, 'Імпорт з банку за розкладом (ваш)', '«🚀 Підключення», крок 1: «Імпорт з банку щодня»'],
     [cp, 'Залишок на картці (контрольна точка)', 'сам з Mono або вручну на «' + CP_SHEET + '»' + hid],
     [rows.length > 0, 'Перші записи в журналі', 'аркуш «' + JOURNAL + '» або демо-місяць'],
-    [ss.getSheetByName(REG_SHEET) ? regList_(ss).length > 0 : null, 'Регулярні платежі й доходи (оренда, підписки, зарплата)', '«🚀 Підключення», крок 3, або аркуш «' + REG_SHEET + '»'],
+    [ss.getSheetByName(REG_SHEET) ? regOwn_(ss).length > 0 : null, 'Регулярні платежі й доходи (оренда, підписки, зарплата)', '«🚀 Підключення», крок 3, або аркуш «' + REG_SHEET + '»'],
     [modOn_('tg') ? tgConnected_() : null, 'Telegram-бот (ранковий підсумок, звіти)', '«🚀 Підключення», крок 2'],
     [modOn_('cal') ? !!dp.getProperty('cal_stat') : null, 'Календар платежів', 'увімкнено модулем; оновлюється сам'],
-    [modOn_('fop') ? fops.length > 0 : null, 'ФОП: група, ставки', 'аркуш «' + FOP_SHEET + '»'],
-    [modOn_('debts') ? debtsList_(ss).length > 0 : null, 'Борги й розстрочки', 'аркуш «' + DEBTS_SHEET + '»'],
+    [modOn_('fop') ? fops.length > 0 : null, 'ФОП: група, ставки', 'аркуш «' + FOP_SHEET + '»' + hid],
+    [modOn_('debts') ? debtsList_(ss).length > 0 : null, 'Борги й розстрочки', 'аркуш «' + DEBTS_SHEET + '»' + hid],
     [modOn_('advisor') ? !!dp.getProperty('adv_doc_id') : null, 'Радник Gemini: знімок і навичка', '«🚀 Підключення», крок 4'],
     [cs.none ? null : cs.bad.length === 0, '«' + CHECK_SHEET + '»: усе OK', 'аркуш «' + CHECK_SHEET + '»' + hid],
   ];
@@ -155,7 +155,7 @@ function demoAdd() {
   const ss = SpreadsheetApp.getActive();
   if (jsonProp_(PropertiesService.getDocumentProperties(), 'demo')) { show_('🎬 Демо-місяць', ['Демо вже додано. Прибрати: «🧹 Очистити демо».']); return; }
   const r = demoAdd_(ss);
-  show_('🎬 Демо-місяць', ['Додано ' + r.rows + ' вигаданих операцій (коментар «[демо]»). Гляньте «' + DASH_SHEET + '», «' + MOB_SHEET + '», «' + DAYS_SHEET + '», «' + MONTHS_SHEET + '».',
+  show_('🎬 Демо-місяць', ['Додано ' + r.rows + ' вигаданих операцій (коментар «[демо]»). Гляньте «' + DASH_SHEET + '» і «' + MOB_SHEET + '».',
     'Прибрати: «🧹 Очистити демо».']);
 }
 

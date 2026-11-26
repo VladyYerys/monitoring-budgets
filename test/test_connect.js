@@ -56,7 +56,7 @@ t('step 1, Mono: token checked without saving; picked accounts saved (main card 
   assert.strictEqual(env.ss.getSheetByName('Налаштування').getRange('B7').getValue(), 'кредитна з лімітом');
   const mods = JSON.parse(env.docProps.getProperty('mods'));
   assert.strictEqual(mods.credit, true); assert.strictEqual(mods.fop, true);
-  assert.strictEqual(env.ss.getSheetByName('ФОП').isSheetHidden(), false, 'модуль ФОП застосовано');
+  assert.ok(env.ss.getSheetByName('ФОП') && env.ss.getSheetByName('ФОП').isSheetHidden(), 'модуль ФОП застосовано; аркуш схований разом з рештою');
   assert.ok(env.triggers.filter(x => x.getHandlerFunction() === 'mbsImport').length === 3, 'імпорт за розкладом');
   const s = c.cnState();
   assert.ok(s.bank.fopAcc && s.bank.schedule && s.bank.mono.length === 2);

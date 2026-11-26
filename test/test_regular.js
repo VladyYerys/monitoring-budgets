@@ -1,6 +1,7 @@
 // «Регулярні»: правила → плани «🔁 план регулярний» у журналі; факт у межах ±5 днів і ±25 % закриває місяць; прострочені; вимкнення.
 const assert = require('assert'), vm = require('vm');
 const { makeEnv } = require('./gasmock');
+const K = (c, x) => require('vm').runInContext(x, c);
 let n = 0; const t = (name, fn) => { fn(); n++; console.log('ok', name); };
 const tz = 'Europe/Kiev';
 
@@ -110,6 +111,7 @@ t('sheet and sync: lists, plans in the journal with the tag, updated in place, p
 t('schedule: once a day or after an edit on «Регулярні» (onEdit marks it, mbsEdit asks for a soon run); menu item exists', () => {
   const env = setup(), c = env.ctx, r = env.ss.getSheetByName('Регулярні');
   r.getRange('A5:I5').setValues([['Підписка', 'Підписки', 299, 28, 'щомісяця', '', '', '', 'так']]);
+  env.docProps.deleteProperty('reg_day');                                   // наступний день (збирання вже раз оновило «Стан» прикладів)
   assert.ok(c.regIfDue_(env.ss), 'перший раз за день');
   assert.strictEqual(c.regIfDue_(env.ss), null, 'вдруге того ж дня: ні');
   env.docProps.setProperty('reg_t', String(Date.now() - 10000));
@@ -122,6 +124,40 @@ t('schedule: once a day or after an edit on «Регулярні» (onEdit marks
   assert.strictEqual(env.triggers.length, before + 1, 'скоро mbsTick');
   env.calls.menu = null; c.onOpen();
   assert.ok(env.calls.menu.indexOf('regularNow') >= 0);
+});
+
+t('examples: 19 kinds (subscriptions, rent, utilities, fuel, sport, insurance, salary, loan, installment, debts, savings) with «ні», no plans, a hint in «Стан»; yours count, examples do not; added once; a step adds them to an older table after your rows', () => {
+  const env = setup(), c = env.ctx, r = env.ss.getSheetByName('Регулярні'), n = K(c, 'REG_EXAMPLES').length;
+  const rows = r.getRange('A5:I54').getValues().filter(x => x[0]);
+  assert.strictEqual(rows.length, n);
+  assert.ok(rows.every(x => x[8] === 'ні'), 'усі вимкнені');
+  ['Netflix', 'Бензин', 'Оренда квартири', 'Страховка авто', 'Зарплата', 'Кредит у банку', 'Розстрочка за телефон', 'Повертаю борг другу', 'Мені повертають борг']
+    .forEach(name => assert.ok(rows.some(x => x[0] === name), name));
+  assert.ok(rows.some(x => x[4] === 'щокварталу') && rows.some(x => x[4] === 'щороку') && rows.some(x => x[6] !== ''), 'щокварталу, щороку, з датою «До»');
+  assert.ok(/приклади/.test(r.getRange('A3').getValue()) && /«так»/.test(r.getRange('A3').getValue()));
+  assert.ok(r.getRange('J5:J23').getValues().every(x => /^💡 приклад, «ні»: /.test(x[0])), 'підказка в «Стані»');
+  assert.ok(/Борги/.test(r.getRange('J18').getValue()), 'кредит: на «Борги»');
+  assert.strictEqual(c.readJournal_(env.ss).filter(o => o.d.indexOf('[Регулярний] ') === 0).length, 0, 'прикладів у журналі немає');
+  assert.strictEqual(c.regOwn_(env.ss).length, 0, 'приклади не рахуються як ваші');
+  assert.ok(/Як додати/.test(env.ss.getSheetByName('Борги').getRange('A3').getValue()));
+  // ваш: приклад з «так» стає планом
+  r.getRange('I5').setValue('так');
+  c.regPlansSync_(env.ss);
+  assert.strictEqual(c.regOwn_(env.ss).length, 1);
+  assert.ok(c.readJournal_(env.ss).some(o => o.d.indexOf('[Регулярний] Netflix: ') === 0));
+  assert.ok(!/приклад/.test(r.getRange('J5').getValue()));
+  // ще раз не додаються
+  assert.strictEqual(c.regExamplesAdd_(env.ss), 0);
+  // стара таблиця: ваші рядки зверху, приклади після них
+  const env2 = setup(), r2 = env2.ss.getSheetByName('Регулярні');
+  r2.getRange('A5:J54').clearContent(); r2.getRange('A5:A54').setNotes(Array.from({ length: 50 }, () => ['']));
+  r2.getRange('A5:I6').setValues([['Моя оренда', 'Оренда житла', 9000, 1, 'щомісяця', '', '', '', 'так'], ['Моя підписка', 'Підписки', 199, 9, 'щомісяця', '', '', '', 'так']]);
+  env2.docProps.deleteProperty('reg_ex');
+  env2.docProps.setProperty('schema_v', '9');
+  env2.ctx.schemaTick_(env2.ss);
+  assert.strictEqual(r2.getRange('A5').getValue(), 'Моя оренда');
+  assert.strictEqual(r2.getRange('A7').getValue(), 'Netflix');
+  assert.strictEqual(env2.ctx.regOwn_(env2.ss).length, 2);
 });
 
 console.log(n + ' tests passed');

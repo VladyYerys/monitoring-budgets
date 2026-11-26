@@ -54,8 +54,9 @@ function setupTemplate() {
   let r;
   try { r = schemaRun_(ss, { allowEmpty: true }); } catch (e) { show_('🚀 Шаблон', ['⚠️ ' + esc_(e.message)]); return; }
   try { const j = ss.getSheetByName(JOURNAL); if (j && ss.setActiveSheet) ss.setActiveSheet(j); } catch (e) { /* ignore */ }
-  show_('🚀 Шаблон готовий', r.lines.concat(['Далі: «' + SETTINGS_SHEET + '» (старт обліку «моїх грошей», картка), «' + CP_SHEET + '» (залишок на картці сьогодні) або ' +
-    '«🚀 Підключення» (картка, Telegram, регулярні, Gemini); потім пишіть у «' + JOURNAL + '».']));
+  show_('🚀 Шаблон готовий', r.lines.concat(['Далі: «🚀 Підключення» (картка, Telegram, регулярні, Gemini); потім пишіть у «' + JOURNAL + '», а дивіться на «' +
+    DASH_SHEET + '» і «' + MOB_SHEET + '». «' + SETTINGS_SHEET + '», «' + CP_SHEET + '» та інші аркуші працюють схованими: показати їх можна на «' + START_SHEET +
+    '», «' + modName_('service') + '»: так.']));
 }
 
 /** При відкритті: одна підказка, якщо оновлення зупинилось або чекає. */

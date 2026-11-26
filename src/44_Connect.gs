@@ -47,7 +47,7 @@ function startWizard() {
 function cnState() {
   const ss = cnSs_(), dp = PropertiesService.getDocumentProperties(), up = PropertiesService.getUserProperties();
   const set = ss.getSheetByName(SETTINGS_SHEET), accs = accList_(ss), fops = fopList_(ss);
-  const reg = ss.getSheetByName(REG_SHEET) ? regList_(ss) : [];
+  const reg = ss.getSheetByName(REG_SHEET) ? regOwn_(ss) : [];
   const regState = ss.getSheetByName(REG_SHEET) ? ss.getSheetByName(REG_SHEET).getRange(REG_FIRST, 10, REG_LAST - REG_FIRST + 1, 1).getValues() : [];
   const tgBot = up.getProperty('tg_bot') || '', tgCode = up.getProperty('tg_link') || '';
   const doc = advDoc_(ss, false);
@@ -300,7 +300,7 @@ function cnRegSuggest(deep) {
     }
   }
   const keys = ops.map(o => o.key).sort(), days = keys.length ? dayDiff_(today, keys[0]) : 0;
-  const items = regSuggest_(ops, ss.getSheetByName(REG_SHEET) ? regList_(ss) : []);
+  const items = regSuggest_(ops, ss.getSheetByName(REG_SHEET) ? regOwn_(ss) : []);
   const inc = items.filter(x => x.income).sort((a, b) => b.amount - a.amount)[0] || null;
   return { items: items, days: Math.max(days, monoDays), canDeep: !!(token && main) && deep !== true && days < 45,
     income: inc ? { day: inc.day, name: inc.name, amount: inc.amount } : null };

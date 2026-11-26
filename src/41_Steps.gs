@@ -28,12 +28,14 @@ const STEPS = [
     done: ss => [REG_SHEET, CH_SHEET].every(n => !!ss.getSheetByName(n)) && modBlockFull_(ss) },
   { v: 9, title: '📊 «Charts» і «charts_mob» (темні дашборди) замість «Головного» й «📱 Телефону»', auto: ss => stepDash_(ss),
     done: ss => [DASH_SHEET, MOB_SHEET].every(n => !!ss.getSheetByName(n)) && !ss.getSheetByName(PHONE_SHEET) && !chartsDataOld_(ss) },
+  { v: 10, title: '🗂 На виду лише «Старт», «Журнал», «Регулярні», «Charts» і «charts_mob»; приклади регулярних платежів і боргів', auto: ss => stepVisible_(ss),
+    done: ss => (!startHasModules_(ss) || modBlockFull_(ss)) && (!ss.getSheetByName(REG_SHEET) || !!PropertiesService.getDocumentProperties().getProperty('reg_ex')) },
 ];
 /** Остання версія таблиці в цьому коді. */
 function schemaLast_() { return STEPS[STEPS.length - 1].v; }
 const SCHEMA_RETRY_MS = 6 * 3600 * 1000;
 /** Порядок вкладок: робочі зліва, службові (зазвичай сховані) справа. */
-const SHEET_ORDER = [START_SHEET, DASH_SHEET, MOB_SHEET, JOURNAL, REG_SHEET, MONTHS_SHEET, DAYS_SHEET, FOP_SHEET, DEBTS_SHEET, DICT_SHEET, SETTINGS_SHEET,
+const SHEET_ORDER = [START_SHEET, JOURNAL, REG_SHEET, DASH_SHEET, MOB_SHEET, MONTHS_SHEET, DAYS_SHEET, DICT_SHEET, SETTINGS_SHEET, FOP_SHEET, DEBTS_SHEET,
   MAIN_SHEET, RULES_SHEET, ACC_SHEET, CP_SHEET, BANK_SHEET, HISTORY_SHEET, H_CAT_SHEET, CHECK_SHEET, CH_SHEET];
 
 function buildIfMissing_(ss, name, fn, out) { if (!ss.getSheetByName(name)) { fn(ss); out.push('«' + name + '» ✓'); } }
@@ -135,7 +137,7 @@ function stepTabs_(ss) {
   const lines = modulesApply_(ss, false);
   sheetsVisibility_(ss);
   return (out.length ? ['Додано: ' + out.join(', ') + '.'] : ['Усе вже було.'])
-    .concat(lines.filter(l => l.indexOf('Змін немає') < 0), [modOn_('service') ? 'Службові аркуші видно.' : 'Службові аркуші сховано: показати на «' + START_SHEET + '», «' + modName_('service') + '»: так.']);
+    .concat(lines.filter(l => l.indexOf('Змін немає') < 0), [modOn_('service') ? 'Усі аркуші видно.' : 'Решту аркушів сховано: показати на «' + START_SHEET + '», «' + modName_('service') + '»: так.']);
 }
 
 /**
@@ -158,6 +160,32 @@ function stepDash_(ss) {
   sheetsVisibility_(ss);
   try { if (ss.setActiveSheet) ss.setActiveSheet(ss.getSheetByName(DASH_SHEET)); } catch (e) { /* ignore */ }
   return out;
+}
+
+/**
+ * Версія 10: на виду лише «Старт», «Журнал», «Регулярні», «Charts», «charts_mob» (як в особистій таблиці: журнал, регулярні, графіки);
+ * «Місяці», «Дні», «Довідник», «Налаштування», «ФОП», «Борги» сховано разом зі службовими. Модуль «🗂 Службові аркуші»
+ * перейменовано на «🗂 Усі аркуші» (ваше «так» / «ні» лишається): «так» показує все.
+ * На «Регулярних» приклади з «Увімкнено: ні» (підписки, оренда, бензин, страховка, зарплата, кредит, розстрочка, борги…) у вільних рядках
+ * після ваших; на «Боргах» підказка, як додати борг. Ваші рядки й дані не змінюються.
+ */
+function stepVisible_(ss) {
+  const st = ss.getSheetByName(START_SHEET), out = [];
+  const nEx = regExamplesAdd_(ss);
+  if (nEx) out.push('«' + REG_SHEET + '»: ' + nEx + ' прикладів з «ні» (планів не ставлять)');
+  const debts = ss.getSheetByName(DEBTS_SHEET);
+  if (debts && String(debts.getRange(3, 1).getValue()) === '') { debts.getRange(3, 1).setValue(DEBT_HINT).setFontColor('#1a73e8').setFontWeight('bold'); out.push('«' + DEBTS_SHEET + '»: як додати борг'); }
+  if (st && startHasModules_(ss)) {
+    const i = MODS.findIndex(m => m.id === 'service'), m = MODS[i], cell = st.getRange(MOD_FIRST + i, 1);
+    if (String(cell.getValue()) !== m.name) { cell.setValue(m.name); st.getRange(MOD_FIRST + i, 3).setValue(m.what); out.push('модуль «' + m.name + '» (був «🗂 Службові аркуші»)'); }
+    if (!modBlockFull_(ss)) modBlockAdd_(ss);
+  }
+  try { sheetsReorder_(ss); } catch (e) { /* порядок вкладок не критичний */ }
+  try { if (ss.setActiveSheet && st) ss.setActiveSheet(st); } catch (e) { /* активний аркуш не сховати */ }
+  sheetsVisibility_(ss);
+  try { startRefresh_(ss); } catch (e) { /* чекліст оновиться завтра */ }
+  return (out.length ? ['Оновлено: ' + out.join(', ') + '.'] : []).concat([modOn_('service') ? 'Усі аркуші видно (так вибрано на «' + START_SHEET + '»).'
+    : 'На виду: «' + VISIBLE_SHEETS.join('», «') + '». Решта працює схованою; показати: «' + START_SHEET + '», «' + modName_('service') + '»: так.']);
 }
 
 /** Блок модулів має рядок для кожного модуля (нові модулі дописуються в кінець). */
@@ -190,11 +218,13 @@ function sheetsReorder_(ss) {
   try { if (was) ss.setActiveSheet(was); } catch (e) { /* ignore */ }
 }
 
-/** Видимість після перестановки (активація могла показати схований аркуш): модулі й «Дані графіків». */
-function sheetsVisibility_(ss) {
-  SERVICE_SHEETS.forEach(n => sheetShow_(ss, n, modOn_('service')));
-  sheetShow_(ss, FOP_SHEET, modOn_('fop'));
-  sheetShow_(ss, DEBTS_SHEET, modOn_('debts'));
+/** Видимість вкладок (і після перестановки: активація могла показати схований аркуш): VISIBLE_SHEETS завжди; решта за модулем «🗂 Усі аркуші» (all: його нове значення); «ФОП» і «Борги» ще й за своїми модулями. */
+function sheetsVisibility_(ss, all) {
+  const on = all === undefined ? modOn_('service') : all;
+  VISIBLE_SHEETS.forEach(n => sheetShow_(ss, n, true));
+  SERVICE_SHEETS.forEach(n => sheetShow_(ss, n, on));
+  sheetShow_(ss, FOP_SHEET, on && modOn_('fop'));
+  sheetShow_(ss, DEBTS_SHEET, on && modOn_('debts'));
   sheetShow_(ss, CH_SHEET, false);
 }
 

@@ -27,7 +27,7 @@ t('new table: block «🧩 Модулі» on «Старт» with 9 modules, typi
   assert.strictEqual(st(env).getRange('A24').getValue(), '🧩 Модулі');
   const v = st(env).getRange('A26:B34').getValues();
   assert.strictEqual(JSON.stringify(v.map(r => r[1])), JSON.stringify(['так', 'так', 'ні', 'так', 'ні', 'так', 'ні', 'ні', 'ні']));
-  assert.strictEqual(v[8][0], '🗂 Службові аркуші');
+  assert.strictEqual(v[8][0], '🗂 Усі аркуші');
   assert.ok(st(env).getRange('B26').getDataValidation().reject, 'лише так / ні');
   const mods = JSON.parse(env.docProps.getProperty('mods'));
   assert.strictEqual(mods.tg, true); assert.strictEqual(mods.fop, false); assert.strictEqual(mods.debts, false);
@@ -135,8 +135,8 @@ t('everything off: a plain journal with «Місяці», «Дні» and charts;
   c.mbsTick();                                                            // правку пропущено: застосує розклад
   assert.ok(K(c, 'MODS').every(m => c.modOn_(m.id) === false));
   assert.strictEqual(JSON.stringify(env.triggers.map(x => x.getHandlerFunction()).sort()), JSON.stringify(['mbsEdit', 'mbsTick']));
-  ['Журнал', 'Місяці', 'Дні', 'Charts', 'charts_mob'].forEach(n => assert.strictEqual(env.ss.getSheetByName(n).isSheetHidden(), false, n));
-  assert.strictEqual(env.ss.getSheetByName('Головне').isSheetHidden(), true, '«Головне»: службовий');
+  ['Старт', 'Журнал', 'Регулярні', 'Charts', 'charts_mob'].forEach(n => assert.strictEqual(env.ss.getSheetByName(n).isSheetHidden(), false, n));
+  ['Місяці', 'Дні', 'Довідник', 'Налаштування', 'Головне'].forEach(n => assert.strictEqual(env.ss.getSheetByName(n).isSheetHidden(), true, n + ': працює схованим'));
   assert.ok(env.ss.getSheetByName('Charts').charts.length >= 6 && env.ss.getSheetByName('charts_mob').charts.length >= 4);
   const r = c.buildMorning_(env.ss, {});
   assert.ok(!/Нічна копія/.test(r.text), 'самоперевірка не скаржиться на вимкнені копії');
@@ -167,7 +167,7 @@ t('upgrade of a version-5 table to 6: backup, modules from what already works (c
   assert.strictEqual(mod('📆 Календар платежів'), 'так', 'календар уже працював');
   assert.strictEqual(mod('🧾 ФОП'), 'так', 'ФОП заповнено');
   assert.strictEqual(mod('🤝 Борги й розстрочки'), 'ні');
-  assert.strictEqual(env.ss.getSheetByName('ФОП').isSheetHidden(), false);
+  assert.strictEqual(env.ss.getSheetByName('ФОП').isSheetHidden(), true, 'модуль увімкнено, але аркуш схований, як і решта («🗂 Усі аркуші»: ні)');
   assert.ok(mainRow(env, 'Грейс: строк') > 0);
   assert.strictEqual(set.getRange('B10').getValue(), 0.035);
   assert.strictEqual(set.getRange('B23').getValue(), 'категорії');

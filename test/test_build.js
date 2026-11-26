@@ -15,15 +15,16 @@ const allFormulas = env => env.ss.getSheets().flatMap(sh => Array.from(sh.cells.
 t('all sheets, the empty starter sheet removed, marked as template, success dialog', () => {
   const env = built();
   assert.strictEqual(JSON.stringify(env.ss.getSheets().map(s => s.getName())), JSON.stringify(
-    ['Старт', 'Charts', 'charts_mob', 'Журнал', 'Регулярні', 'Місяці', 'Дні', 'ФОП', 'Борги', 'Довідник', 'Налаштування', 'Головне', 'Правила', 'Рахунки', 'Залишки банку',
+    ['Старт', 'Журнал', 'Регулярні', 'Charts', 'charts_mob', 'Місяці', 'Дні', 'Довідник', 'Налаштування', 'ФОП', 'Борги', 'Головне', 'Правила', 'Рахунки', 'Залишки банку',
       'Банк', 'Історія місяців', 'Історія категорій', 'Перевірка', 'Дані графіків']));
   const hidden = env.ss.getSheets().filter(s => s.isSheetHidden()).map(s => s.getName());
-  assert.strictEqual(JSON.stringify(hidden), JSON.stringify(['ФОП', 'Борги', 'Головне', 'Правила', 'Рахунки', 'Залишки банку', 'Банк', 'Історія місяців', 'Історія категорій',
-    'Перевірка', 'Дані графіків']), 'на виду лише робочі вкладки: ' + hidden);
+  const shown = env.ss.getSheets().filter(s => !s.isSheetHidden()).map(s => s.getName());
+  assert.strictEqual(JSON.stringify(shown), JSON.stringify(['Старт', 'Журнал', 'Регулярні', 'Charts', 'charts_mob']), 'на виду лише п\'ять вкладок: ' + shown);
+  assert.strictEqual(hidden.length, 15);
   assert.strictEqual(env.docProps.getProperty('mbs'), 'monitoring-budgets-template');
   assert.strictEqual(env.docProps.getProperty('schema_v'), String(env.ctx.schemaLast_()));
   assert.strictEqual(env.ss.getSheetByName('Налаштування').getRange('A40').getValue(), 'monitoring-budgets-template');
-  const dlg = env.calls.dialogs.pop(); assert.ok(/Шаблон готовий/.test(dlg.t) && /версію <b>9<\/b>/.test(dlg.html), dlg.t + dlg.html);
+  const dlg = env.calls.dialogs.pop(); assert.ok(/Шаблон готовий/.test(dlg.t) && /версію <b>10<\/b>/.test(dlg.html), dlg.t + dlg.html);
   assert.strictEqual(env.files.length, 0, 'у порожній таблиці копія перед змінами не потрібна');
 });
 
