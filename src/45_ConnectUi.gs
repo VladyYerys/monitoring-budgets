@@ -119,7 +119,7 @@ details{margin:8px 0}summary{cursor:pointer;color:#5f6368}
     el('st2').innerHTML = s.tg.connected ? '@' + h(s.tg.bot) + (s.tg.on ? '' : ' (модуль вимкнено)') : s.tg.bot ? 'чекає Start' : 'не підключено';
     el('st3').innerHTML = s.reg.items.length ? s.reg.items.length + ' на аркуші' : 'ще немає';
     el('st4').innerHTML = !done[3] ? 'не підключено' : s.adv.old ? '<span class="warn">нова навичка: скопіюйте ще раз</span>' :
-      s.adv.copied ? 'навичка v' + s.adv.copied : 'знімок є';
+      s.adv.relink ? '<span class="warn">новий знімок: скопіюйте ще раз</span>' : s.adv.copied ? 'навичка v' + s.adv.copied : 'знімок є';
     advFill(s.adv);
     [1, 2, 3, 4].forEach(function (k) { var e = el('s' + k), open = e.className.indexOf('open') >= 0; e.className = 'step' + (done[k - 1] ? ' done' : '') + (open ? ' open' : ''); });
     el('card').value = b.credit ? '1' : '0'; el('bday').value = b.bday; el('sched').checked = b.schedule;
@@ -263,11 +263,12 @@ details{margin:8px 0}summary{cursor:pointer;color:#5f6368}
     run('cnAdvisor', [advRules()], function (r) {
       el('advres').innerHTML = '<p class="ok">✓ Правила збережено. Знімок: <a href="' + h(r.doc) + '">' + h(r.docName) + '</a></p><ol class="how">' +
         '<li><button class="pri" onclick="cpMsg()">📋 Скопіювати для Gemini</button> <span id="cpok"></span></li>' +
-        '<li><a href="' + h(r.gemini) + '">Відкрийте Gemini</a>, вставте в чат і надішліть: Gemini сам створить навичку «' + h(r.title) + '».</li>' +
+        '<li><a href="' + h(r.gemini) + '">Відкрийте Gemini</a>, вставте в чат і надішліть: Gemini сам створить навичку «' + h(r.title) + '». ' +
+        'У тексті пряме посилання на ваш знімок: Gemini відкриє його одразу, без пошуку.</li>' +
         '<li>Далі просто питайте в будь-якому чаті Gemini, наприклад: «' + h(r.starters[0]) + '». Google Диск у Gemini має бути підключений.</li></ol>' +
         '<textarea id="advmsg" readonly onclick="this.select()">' + h(r.msg) + '</textarea>' +
-        '<details><summary>Інакше: створити вручну або з файла</summary><p class="hint">Gemini → Skills → Create → Create manually (поля нижче) або Upload <a href="' +
-        h(r.skillFile) + '">SKILL.md</a>.</p>Назва:' + area(r.title) + 'Опис:' + area(r.description) + 'Інструкція:' + area(r.instructions) + '</details>' +
+        '<details><summary>Інакше: створити вручну або з файла</summary><p class="hint">Gemini → Skills → Create → Create manually (поля нижче, з посиланням) або Upload <a href="' +
+        h(r.skillFile) + '">SKILL.md</a> (без посилання: Gemini шукатиме знімок за назвою).</p>Назва:' + area(r.title) + 'Опис:' + area(r.description) + 'Інструкція:' + area(r.instructions) + '</details>' +
         '<p class="hint">Правила можна змінити тут будь-коли: вони йдуть у знімок, а навичка (версія ' + r.v + ') лишається та сама.</p>';
       load();
     }, '⏳ Зберігаю й роблю знімок…');

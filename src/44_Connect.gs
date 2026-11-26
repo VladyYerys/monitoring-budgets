@@ -65,7 +65,7 @@ function cnState() {
     reg: { items: reg.map(r => ({ name: r.name, cat: r.cat, amount: r.amt, day: r.day, per: r.per, on: r.on, state: String((regState[r.i] || [''])[0]) })) },
     cats: cnCats_(ss),
     adv: { on: modOn_('advisor'), doc: doc ? doc.getUrl() : '', t: dp.getProperty('adv_t') || '', rules: advRules_(ss), prio: ADV_PRIO, max: ADV_RULES_MAX,
-      v: ADV_SKILL.v, copied: Number(dp.getProperty('adv_skill_v') || 0), old: advSkillOld_(), fop: modOn_('fop'), credit: modOn_('credit') },
+      v: ADV_SKILL.v, copied: Number(dp.getProperty('adv_skill_v') || 0), old: advSkillOld_(), relink: advSkillRelink_(), fop: modOn_('fop'), credit: modOn_('credit') },
     demo: !!jsonProp_(dp, 'demo'), empty: !readJournal_(ss).some(o => !o.blank), done: !!dp.getProperty('wiz_done'),
     links: { mono: CN_MONO, botfather: CN_BOTFATHER, gemini: CN_GEMINI },
   };
@@ -329,13 +329,13 @@ function cnRegAdd(list) {
 
 /* ---------- 4. Gemini ---------- */
 
-/** «Мої правила» (якщо передані) → знімок на вашому Диску → одне повідомлення для чату Gemini (і запасні поля навички). */
+/** «Мої правила» (якщо передані) → знімок на вашому Диску → одне повідомлення для чату Gemini з прямим посиланням на знімок (і запасні поля навички). */
 function cnAdvisor(rules) {
   const ss = cnSs_();
   if (rules) advRulesSave_(ss, rules);
   if (!modOn_('advisor')) modSet_(ss, 'advisor', true);                  // знімок пишемо нижче самі
   const r = snapshotWrite_(ss);
-  return { doc: r.url, docName: ADV_DOC, chars: r.chars, msg: advSkillMsg_(), title: ADV_SKILL.title, description: ADV_SKILL.description, instructions: advSkillInstructions_(),
+  return { doc: r.url, docName: ADV_DOC, chars: r.chars, msg: advSkillMsg_(r.url), title: ADV_SKILL.title, description: ADV_SKILL.description, instructions: advSkillInstructions_(r.url),
     starters: ADV_SKILL.starters, gemini: CN_GEMINI, skillFile: REPO_URL + '/blob/main/gemini/' + ADV_SKILL.name + '/SKILL.md', v: ADV_SKILL.v, rules: advRules_(ss) };
 }
 

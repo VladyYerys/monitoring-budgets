@@ -208,4 +208,37 @@ t('panel step 4: rules saved with the snapshot, the message returned; «скоп
   assert.throws(() => c.cnAdvisor({ rules: '4441 1144 4111 4444' }), /номер картки/);
 });
 
+t('direct link: the copied text (panel and menu) points straight to your snapshot with a fallback by name; SKILL.md in the repository has no link; a recreated snapshot asks to copy again', () => {
+  const env = setup(), c = env.ctx;
+  const a = c.cnAdvisor(), url = a.doc;
+  assert.ok(/^https:\/\/docs\.google\.com\/document\/d\/[\w-]+/.test(url), url);
+  assert.ok(a.msg.indexOf('за посиланням ' + url + ' (мій Google Диск)') >= 0 && a.msg.indexOf('Якщо посилання не відкривається, знайди документ з такою назвою') >= 0, a.msg.slice(0, 900));
+  assert.ok(a.instructions.indexOf(url) >= 0, 'поля «Інакше» теж з посиланням');
+  assert.ok(c.advSkillMd_().indexOf('docs.google.com') < 0 && c.advSkillInstructions_().indexOf('знайди на моєму Google Диску документ') >= 0, 'SKILL.md: без посилання, пошук за назвою');
+  const file = fs.readFileSync(path.join(__dirname, '..', 'gemini', 'monitoring-budgets-advisor', 'SKILL.md'), 'utf8');
+  assert.ok(!/docs\.google\.com|\/d\/[\w-]{20,}/.test(file), 'у репозиторії немає посилань на чужі документи');
+  // меню: те саме посилання в тексті
+  c.advisorNow();
+  const d = env.calls.dialogs.pop();
+  assert.ok(d.html.indexOf('за посиланням ' + url) >= 0 && /пряме посилання на нього/.test(d.html), d.html.slice(0, 1500));
+  // скопіювали → документ створено заново (видалили з Диска) → панель і меню просять скопіювати ще раз
+  assert.strictEqual(c.cnState().adv.relink, false, 'ще не копіювали: нагадувати нічого');
+  c.advSkillCopied();
+  assert.strictEqual(c.cnState().adv.relink, false);
+  env.docProps.setProperty('adv_doc_id', 'NEW_DOC_' + 'b'.repeat(20));
+  assert.strictEqual(c.cnState().adv.relink, true);
+  c.advisorNow();
+  assert.ok(/створено заново: скопіюйте текст ще раз/.test(env.calls.dialogs.pop().html));
+  c.advSkillCopied();
+  assert.strictEqual(c.cnState().adv.relink, false, 'скопіювали з новим посиланням');
+});
+
+t('menu without a snapshot yet: text without a link (search by name) and a hint to make the snapshot first', () => {
+  const env = makeEnv(), c = env.ctx;
+  env.ss.insertSheet('Аркуш1'); c.setupTemplate();
+  c.advisorNow();
+  const d = env.calls.dialogs.pop();
+  assert.ok(d.html.indexOf('docs.google.com') < 0 && /тоді в тексті для Gemini буде пряме посилання/.test(d.html) && /знайди на моєму Google Диску документ/.test(d.html), d.html.slice(0, 1500));
+});
+
 console.log(n + ' tests passed');
