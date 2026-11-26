@@ -35,7 +35,7 @@ function tgReady_() { return tgConnected_() && modOn_('tg'); }
 
 function tgSend_(text) {
   const up = PropertiesService.getUserProperties(), token = up.getProperty('tg_token'), chat = up.getProperty('tg_chat');
-  if (!token || !chat) throw new Error('бот не підключено («⚙️ Налаштування → 📨 Підключити Telegram-бота»)');
+  if (!token || !chat) throw new Error('бот не підключено («🚀 Підключення», крок 2)');
   if (!modOn_('tg')) throw new Error('модуль «📨 Telegram» вимкнено на «' + START_SHEET + '»');
   if (text.length > TG_MAX) text = text.slice(0, TG_MAX - 20).replace(/\n[^\n]*$/, '') + '\n…(скорочено)';
   return tgCall_(token, 'sendMessage', { chat_id: chat, text: text, parse_mode: 'HTML', disable_web_page_preview: true });
@@ -324,5 +324,5 @@ function tgStatusLines_(ss) {
   const up = PropertiesService.getUserProperties(), dp = PropertiesService.getDocumentProperties();
   if (!modOn_('tg')) return ['Модуль вимкнено на «' + START_SHEET + '»' + (tgConnected_() ? ' (бот @' + esc_(up.getProperty('tg_bot') || '?') + ' лишився підключеним)' : '') + '.'];
   return [tgReady_() ? 'Бот @' + esc_(up.getProperty('tg_bot') || '?') + ' підключено ✓; ранковий підсумок: ' + (hasTrigger_(TRG.morning) ? 'щодня о ' + pad2_(TG_HOUR) + ':00' : '<b>вимкнено</b>') +
-    (dp.getProperty('tg_sent_day') ? ', останній: ' + dp.getProperty('tg_sent_day') : '') : 'Не підключено: «⚙️ Налаштування → 📨 Підключити Telegram-бота».'];
+    (dp.getProperty('tg_sent_day') ? ', останній: ' + dp.getProperty('tg_sent_day') : '') : 'Не підключено: «🚀 Підключення», крок 2.'];
 }

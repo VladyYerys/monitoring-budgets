@@ -1,6 +1,7 @@
 // Оновлення: чи вийшла нова версія (публічний version.json, раз на день, без даних людей) і «📦 Перенести дані зі старої копії».
 const assert = require('assert'), fs = require('fs'), path = require('path'), vm = require('vm');
 const { makeEnv } = require('./gasmock');
+const { panelSetup } = require('./panel');
 let n = 0; const t = (name, fn) => { fn(); n++; console.log('ok', name); };
 const K = (c, s) => vm.runInContext(s, c);
 const COPY = 'https://docs.google.com/spreadsheets/d/' + 'X'.repeat(30) + '/copy';
@@ -59,8 +60,7 @@ t('same version, broken file, no network, foreign copy link: calm text, no crash
 
 /** Стара копія: демо, сім'я, свої налаштування, правило, борг, модулі, рядок історії. */
 function oldCopy() {
-  const env = makeEnv({ promptText: ['2', 'Олена, Іван', '2', '20', '', '', '1, 4, 6', '', 'так'] }), c = env.ctx;
-  env.ss.insertSheet('Аркуш1'); c.startWizard();
+  const env = panelSetup(makeEnv(), { family: 'Олена, Іван', credit: false, bday: 20, mods: ['tg', 'budgets', 'backup'], demo: true }), c = env.ctx;
   env.ss.getSheetByName('Правила').getRange('A100:E100').setValues([['так', 'моя кавʼярня', 'опис банку', 'списання', 'Кава та перекуси']]);
   c.modSet_(env.ss, 'debts', true);
   env.ss.getSheetByName('Борги').getRange('A5:F5').setValues([['Розстрочка', 'я винен', 12000, 1000, 15, '']]);

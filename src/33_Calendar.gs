@@ -129,7 +129,7 @@ function calendarOff() {
 function calLines_(ss) {
   const dp = PropertiesService.getDocumentProperties(), tz = ss.getSpreadsheetTimeZone(), st = jsonProp_(dp, 'cal_stat'), err = jsonProp_(dp, 'cal_err');
   const fmt = t => Utilities.formatDate(new Date(Number(t)), tz, 'dd.MM HH:mm');
-  if (!calOn_()) return ['Вимкнено. Увімкнути: «' + START_SHEET + '», модуль «📆 Календар платежів» → так (або «⚙️ Налаштування → 📆 Календар платежів: увімкнути / оновити»).'];
+  if (!calOn_()) return ['Вимкнено. Увімкнути: «' + START_SHEET + '», модуль «📆 Календар платежів» → так.'];
   const out = ['Увімкнено: «' + esc_(CAL_NAME) + '»' + (st ? ', оновлено ' + fmt(st.t) + ': ' + calStatText_(st) : '') + '.'];
   if (err) out.push('⚠️ Помилка ' + fmt(err.t) + ': ' + esc_(err.msg));
   return out;

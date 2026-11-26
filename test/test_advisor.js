@@ -1,15 +1,14 @@
 // Радник Gemini: знімок фінансів (зміст, рівні деталей, приватність), документ на Диску, щоденне оновлення, навичка (SKILL.md).
 const assert = require('assert'), fs = require('fs'), path = require('path'), vm = require('vm');
 const { makeEnv } = require('./gasmock');
+const { panelSetup } = require('./panel');
 let n = 0; const t = (name, fn) => { fn(); n++; console.log('ok', name); };
 const K = (c, s) => vm.runInContext(s, c);
 
-/** Таблиця з майстром (сім'я, демо-місяць) і модулем радника. */
+/** Таблиця з панелі «🚀 Підключення» (сім'я, ФОП, демо-місяць) і модулем радника. */
 function setup(opts) {
-  const env = makeEnv(Object.assign({ promptText: ['2', 'Олена, Іван', '1', '25', 'Олена:3', '', '1, 2, 3, 4, 6, 7, 8', '', 'так'] }, opts || {}));
-  env.ss.insertSheet('Аркуш1');
-  env.ctx.startWizard();
-  return env;
+  const env = makeEnv(opts || {});
+  return panelSetup(env, { family: 'Олена, Іван', credit: true, bday: 25, fop: [['Олена', '3']], mods: ['tg', 'credit', 'debts', 'budgets', 'backup', 'fop', 'advisor'], demo: true });
 }
 const tz = 'Europe/Kiev';
 /** Мок формул не рахує: ставимо результати службових колонок журналу (тип I, стан M, факт O, вид рахунку AG), як їх порахували б Таблиці. */

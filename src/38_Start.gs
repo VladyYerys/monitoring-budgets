@@ -1,23 +1,19 @@
-/** 38_Start.gs: «🚀 Почати»: аркуш «Старт» з чеклістом і модулями, майстер (режим, картка, доходи, категорії, модулі), демо-місяць. */
+/** 38_Start.gs: аркуш «Старт» з чеклістом і модулями, демо-місяць. Підключення (картка, Telegram, регулярні, Gemini): 44_Connect.gs. */
 
 /*
- * У копії шаблону розклади й дозволи не переносяться, тож усе починається з меню «📊 Monitoring Budgets → 🚀 Почати»:
- * скрипт добудовує, чого бракує, і ставить кілька запитань. Відповіді можна змінити пізніше на «Налаштуваннях», «Довіднику», «ФОП».
- * Чекліст на «Старті» оновлює скрипт (раз на день, після майстра і з меню): ✓ зроблено, • ще ні, «—» не потрібно.
+ * У копії шаблону розклади й дозволи не переносяться, тож усе починається з меню «📊 Monitoring Budgets → 🚀 Підключення»:
+ * скрипт добудовує, чого бракує, і відкриває бічну панель з чотирма кроками (44_Connect.gs).
+ * Чекліст на «Старті» оновлює скрипт (раз на день, після «Готово» в панелі «🚀 Підключення» і з меню): ✓ зроблено, • ще ні, «—» не потрібно.
  * Демо-місяць: вигадані операції з позначкою «[демо]» у коментарі, щоб одразу побачити «Головне» й графіки; «🧹 Очистити демо» прибирає все.
  */
 
 const START_FIRST = 6;
 const DEMO_TAG = '[демо] ';
-const CAT_SETS = [
-  ['Діти', ['Діти']], ['Тварини', ['Тварини']], ['Авто', ['Пальне']], ['Оренда житла', ['Оренда житла']],
-  ['ФОП і податки', ['Єдиний податок', 'ЄСВ', 'Військовий збір', 'Дохід ФОП', 'Резерв на податки']],
-];
 
 function buildStart_(ss) {
   const sh = ensureSize_(sheetOf_(ss, START_SHEET), MOD_FIRST + MODS.length + 5, 4);
   sh.getRange(1, 1).setValue('🚀 Старт').setFontWeight('bold').setFontSize(14);
-  sh.getRange(2, 1).setValue('Почніть з меню «📊 ' + APP_NAME + ' → 🚀 Почати» (на комп\'ютері: на телефоні меню скриптів немає). ' +
+  sh.getRange(2, 1).setValue('Почніть з меню «📊 ' + APP_NAME + ' → 🚀 Підключення» (на комп\'ютері: на телефоні меню скриптів немає). ' +
     'Кроки нижче позначаються самі.').setWrap(false);
   sh.getRange(START_FIRST - 1, 1, 1, 3).setValues([['', 'Крок', 'Як']]).setFontWeight('bold');
   startModulesBlock_(ss, sh);
@@ -33,19 +29,19 @@ function startSteps_(ss) {
   const cs = checkState_(ss), up = PropertiesService.getUserProperties(), fops = fopList_(ss);
   const hid = modOn_('service') ? '' : ' (сховано: «' + modName_('service') + '»: так)';
   return [
-    [!!dp.getProperty('wiz_done'), 'Майстер «🚀 Почати» пройдено', 'меню «📊 ' + APP_NAME + ' → 🚀 Почати»'],
+    [!!dp.getProperty('wiz_done'), '«🚀 Підключення» пройдено (кнопка «Готово»)', 'меню «📊 ' + APP_NAME + ' → 🚀 Підключення»'],
     [!!(set && set.getRange(SET.start).getValue()), 'Старт обліку «моїх грошей», вид картки, день доходу', 'аркуш «' + SETTINGS_SHEET + '»'],
     [fam ? members_(ss).length >= 2 : null, 'Учасники сім\'ї (до 5)', '«' + SETTINGS_SHEET + '», блок «Сім\'я»'],
-    [accs.length > 0, 'Банк: Mono, ПриватБанк для ФОП або виписка', 'меню «⚙️ Налаштування» або «📥 Імпорт виписок з папки»'],
-    [up.getProperty('mono_token') || up.getProperty('pb_token') ? has(TRG.imp) : null, 'Імпорт з банку за розкладом (ваш)', '«⚙️ Налаштування → 🏦 Імпорт за розкладом: увімкнути»'],
+    [accs.length > 0, 'Банк: Mono, ПриватБанк для ФОП або виписка', '«🚀 Підключення», крок 1'],
+    [up.getProperty('mono_token') || up.getProperty('pb_token') ? has(TRG.imp) : null, 'Імпорт з банку за розкладом (ваш)', '«🚀 Підключення», крок 1: «Імпорт з банку щодня»'],
     [cp, 'Залишок на картці (контрольна точка)', 'сам з Mono або вручну на «' + CP_SHEET + '»' + hid],
     [rows.length > 0, 'Перші записи в журналі', 'аркуш «' + JOURNAL + '» або демо-місяць'],
-    [ss.getSheetByName(REG_SHEET) ? regList_(ss).length > 0 : null, 'Регулярні платежі й доходи (оренда, підписки, зарплата)', 'аркуш «' + REG_SHEET + '»: стануть планами в журналі'],
-    [modOn_('tg') ? tgConnected_() : null, 'Telegram-бот (ранковий підсумок, звіти)', '«⚙️ Налаштування → 📨 Підключити Telegram-бота»'],
+    [ss.getSheetByName(REG_SHEET) ? regList_(ss).length > 0 : null, 'Регулярні платежі й доходи (оренда, підписки, зарплата)', '«🚀 Підключення», крок 3, або аркуш «' + REG_SHEET + '»'],
+    [modOn_('tg') ? tgConnected_() : null, 'Telegram-бот (ранковий підсумок, звіти)', '«🚀 Підключення», крок 2'],
     [modOn_('cal') ? !!dp.getProperty('cal_stat') : null, 'Календар платежів', 'увімкнено модулем; оновлюється сам'],
     [modOn_('fop') ? fops.length > 0 : null, 'ФОП: група, ставки', 'аркуш «' + FOP_SHEET + '»'],
     [modOn_('debts') ? debtsList_(ss).length > 0 : null, 'Борги й розстрочки', 'аркуш «' + DEBTS_SHEET + '»'],
-    [modOn_('advisor') ? !!dp.getProperty('adv_doc_id') : null, 'Радник Gemini: знімок і навичка', 'меню «🤖 Радник Gemini»'],
+    [modOn_('advisor') ? !!dp.getProperty('adv_doc_id') : null, 'Радник Gemini: знімок і навичка', '«🚀 Підключення», крок 4'],
     [cs.none ? null : cs.bad.length === 0, '«' + CHECK_SHEET + '»: усе OK', 'аркуш «' + CHECK_SHEET + '»' + hid],
   ];
 }
@@ -73,112 +69,6 @@ function startIfDue_(ss) {
 }
 
 /* ---------- майстер ---------- */
-
-/** «🚀 Почати»: добудувати таблицю (у копії й порожній), потім запитання. */
-function startWizard() {
-  const ss = SpreadsheetApp.getActive(), ui = SpreadsheetApp.getUi();
-  try { guard_(ss, true); } catch (e) { show_('🚀 Почати', ['⚠️ ' + esc_(e.message)]); return; }
-  let built;
-  try { built = schemaRun_(ss, { allowEmpty: true }); } catch (e) { show_('🚀 Почати', ['⚠️ ' + esc_(e.message)]); return; }
-  const ask = (title, text, def) => {
-    const a = ui.prompt(title, text, ui.ButtonSet.OK_CANCEL);
-    if (a.getSelectedButton() !== ui.Button.OK) return null;
-    const v = String(a.getResponseText() || '').trim();
-    return v === '' ? def : v;
-  };
-  const set = ss.getSheetByName(SETTINGS_SHEET), out = [], wiz = {};
-  // 1. режим і учасники
-  const mode = ask('🚀 1/6 · Хто веде облік', '1: одна людина\n2: сім\'я (до 5 учасників)\n\nНомер (порожньо: 1):', '1');
-  if (mode === null) return;
-  if (mode === '2') {
-    const names = ask('🚀 1/6 · Учасники', 'Імена учасників через кому, до 5 (наприклад: Олена, Іван).\nТак вони будуть у колонці «Хто».', '');
-    if (names === null) return;
-    const list = names.split(',').map(s => s.trim()).filter(Boolean).slice(0, SET_MEMBERS_N);
-    set.getRange(SET.mode).setValue(MODE_FAMILY);
-    set.getRange(SET_MEMBERS_FIRST, 2, SET_MEMBERS_N, 1).setValues(Array.from({ length: SET_MEMBERS_N }, (x, i) => [list[i] || '']));
-    out.push('Режим: сім\'я (' + esc_(list.join(', ') || 'учасників впишіть на «' + SETTINGS_SHEET + '»') + ').');
-  } else { set.getRange(SET.mode).setValue(MODE_SOLO); out.push('Режим: одна людина.'); }
-  // 2. картка
-  const card = ask('🚀 2/6 · Картка', 'Основна картка:\n1: кредитна з лімітом (рахуємо «мої» окремо від ліміту)\n2: дебетова\n\nНомер (порожньо: 1):', '1');
-  if (card === null) return;
-  set.getRange(SET.card).setValue(card === '2' ? CARD_DEBIT : CARD_CREDIT);
-  out.push('Картка: ' + (card === '2' ? CARD_DEBIT : CARD_CREDIT) + '.');
-  // 3. доходи
-  const bday = ask('🚀 3/6 · Доходи', 'З якого числа дохід (зарплата, ФОП) іде в бюджет наступного місяця?\n' +
-    'Наприклад, 25: зарплата 25-го наповнює наступний місяць. 1: дохід завжди в поточний місяць.\n\nЧисло (порожньо: 25):', '25');
-  if (bday === null) return;
-  set.getRange(SET.bday).setValue(Math.max(1, Math.min(31, Number(bday) || 25)));
-  const fopAns = ask('🚀 3/6 · ФОП', 'Є ФОП у сім\'ї? Введіть «ім\'я:група» через кому, наприклад «Олена:3, Іван:2».\n' +
-    'Ім\'я: як у колонці «Хто». Порожньо: ФОП немає.', '');
-  if (fopAns === null) return;
-  const fops = fopAns.split(',').map(s => s.split(':').map(x => x.trim())).filter(x => x[0] && ['1', '2', '3'].indexOf(x[1]) >= 0).slice(0, FOP_LAST - FOP_FIRST + 1);
-  wiz.fop = fops.length > 0;
-  if (fops.length) {
-    const fsh = ss.getSheetByName(FOP_SHEET);
-    fsh.getRange(FOP_FIRST, 1, fops.length, 5).setValues(fops.map(f => [f[0], f[1], '', 'так', 'так']));
-    out.push('ФОП: ' + esc_(fops.map(f => f[0] + ' (' + f[1] + ' група)').join(', ')) + '. Свою ставку ЄП громади можна вписати на «' + FOP_SHEET + '».');
-  }
-  out.push('Дохід з ' + set.getRange(SET.bday).getValue() + '-го числа: у наступний місяць.');
-  // 4. категорії
-  const keep = ask('🚀 4/6 · Категорії', 'Які набори категорій лишити? ' + CAT_SETS.map((c, i) => (i + 1) + ') ' + c[0]).join(', ') +
-    '.\nНомери через кому; порожньо: усі. Інші категорії лишаються завжди.', '');
-  if (keep === null) return;
-  if (keep) {
-    const nums = keep.split(/[,\s]+/).map(Number);
-    const drop = CAT_SETS.filter((c, i) => nums.indexOf(i + 1) < 0 && !(c[0] === 'ФОП і податки' && fops.length)).reduce((a, c) => a.concat(c[1]), []);
-    const removed = dictRemove_(ss, drop);
-    if (removed.length) out.push('Прибрано категорії: ' + esc_(removed.join(', ')) + '.');
-  }
-  // 5. модулі й підключення
-  const rec = { tg: true, credit: card !== '2', debts: false, budgets: true, cal: false, backup: true, fop: fops.length > 0, advisor: false };
-  const modsAns = ask('🚀 5/6 · Модулі', 'Що ввімкнути? ' + MODS.map((x, i) => (i + 1) + ') ' + x.name).join('  ') +
-    '\nНомери через кому; порожньо: рекомендовані (' + MODS.map((x, i) => (rec[x.id] ? i + 1 : 0)).filter(Boolean).join(', ') + ').\n' +
-    'Змінити потім: аркуш «' + START_SHEET + '», блок «🧩 Модулі» (так / ні).', '');
-  if (modsAns === null) return;
-  const picked = modsAns ? modsAns.split(/[,\s]+/).map(Number).filter(x => x >= 1 && x <= MODS.length) : null;
-  const st = ss.getSheetByName(START_SHEET);
-  MODS.forEach((x, i) => { wiz[x.id] = picked ? picked.indexOf(i + 1) >= 0 : rec[x.id]; });
-  if (st && startHasModules_(ss)) st.getRange(MOD_FIRST, 2, MODS.length, 1).setValues(MODS.map(x => [wiz[x.id] ? MOD_YES : MOD_NO]));
-  out.push('Модулі: ' + MODS.filter(x => wiz[x.id]).map(x => x.name).join(', ') + '.');
-  const conn = ask('🚀 5/6 · Що підключити зараз', '1) Mono  2) ПриватБанк для ФОП («Автоклієнт»)' + (wiz.tg ? '  3) Telegram-бот' : '') +
-    '\nНомери через кому; порожньо: нічого (можна пізніше в «⚙️ Налаштування»).', '');
-  if (conn === null) return;
-  const m = conn.split(/[,\s]+/).map(Number);
-  // 6. демо
-  const journalEmpty = !readJournal_(ss).some(o => !o.blank);
-  const demo = journalEmpty ? ask('🚀 6/6 · Демо-місяць', 'Додати вигадані операції за минулий і цей місяць, щоб одразу побачити «Головне» й графіки?\n' +
-    'Прибрати потім: «🧹 Очистити демо». (так / ні; порожньо: так)', 'так') : 'ні';
-  if (demo === null) return;
-  const dp = PropertiesService.getDocumentProperties();
-  dp.setProperties({ wiz: JSON.stringify(wiz), wiz_done: new Date().toISOString() });
-  if (/^т/i.test(demo)) { const d = demoAdd_(ss); out.push('Демо: ' + d.rows + ' операцій ✓ (коментар «[демо]»).'); }
-  let modLines = [];
-  try { modLines = modulesApply_(ss, true).filter(l => l.indexOf('⚠️') >= 0); } catch (e) { modLines = ['⚠️ Модулі: ' + esc_(e && e.message || e)]; }
-  startRefresh_(ss);
-  const wantConn = m.indexOf(1) >= 0 || m.indexOf(2) >= 0 || (wiz.tg && m.indexOf(3) >= 0);
-  show_('🚀 Готово', (built.ran ? ['Таблицю добудовано ✓.'] : []).concat(out, modLines, ['Далі: аркуш «' + START_SHEET + '» (чекліст і модулі).',
-    wantConn ? 'Зараз відкриються вікна підключення.' : '']));
-  if (m.indexOf(1) >= 0) connectMono();
-  if (m.indexOf(2) >= 0) connectPrivat();
-  if (wiz.tg && m.indexOf(3) >= 0) connectTelegram();
-}
-
-/** Прибрати категорії з «Довідника», якщо їх немає в журналі. Правила з цими категоріями теж. → прибрані назви. */
-function dictRemove_(ss, names) {
-  const d = ss.getSheetByName(DICT_SHEET), used = new Set(readJournal_(ss).map(o => o.c)), out = [];
-  const v = d.getRange(D_FIRST, 1, D_LAST - D_FIRST + 1, 7).getValues();
-  v.forEach((r, i) => {
-    const n = String(r[0]).trim();
-    if (names.indexOf(n) < 0 || used.has(n)) return;
-    d.getRange(D_FIRST + i, 1, 1, 7).setValues([['', '', '', '', '', '', '']]);
-    out.push(n);
-  });
-  const rs = ss.getSheetByName(RULES_SHEET);
-  if (rs && out.length) rs.getRange(RULES_FIRST, 1, RULES_LAST - RULES_FIRST + 1, 7).getValues().forEach((r, i) => {
-    if (out.indexOf(String(r[4]).trim()) >= 0) rs.getRange(RULES_FIRST + i, 1, 1, 7).setValues([['', '', '', '', '', '', '']]);
-  });
-  return out;
-}
 
 /* ---------- демо-місяць ---------- */
 

@@ -300,6 +300,7 @@ function makeEnv(opts = {}) {
       return new Date(guess - (asUtc - guess));
     },
     sleep: ms => { calls.sleep += ms; },
+    getUuid: () => require('crypto').randomUUID(),
     DigestAlgorithm: { MD5: 'MD5' }, Charset: { UTF_8: 'UTF_8' },
     computeDigest: (alg, str) => Array.from(require('crypto').createHash('md5').update(String(str), 'utf8').digest()).map(b => (b > 127 ? b - 256 : b)),
     parseCsv: (text, delim) => {                                    // як Utilities.parseCsv: лапки, подвоєні лапки, переноси рядків у лапках
@@ -355,6 +356,7 @@ function makeEnv(opts = {}) {
       const a = Array.isArray(opts.promptText) ? (opts.promptText.length ? opts.promptText.shift() : '') : (opts.promptText || '');
       return { getSelectedButton: () => (a === null ? 'CANCEL' : opts.promptButton || 'OK'), getResponseText: () => (a === null ? '' : a) }; },
     showModalDialog: (h, t) => calls.dialogs.push({ t, html: h.html }),
+    showSidebar: h => { calls.sidebars = (calls.sidebars || []).concat([{ t: h.title, html: h.html }]); },
     createMenu: () => { const m = { items: [], addItem: (a, b) => (m.items.push(b), m), addSeparator: () => m, addSubMenu: s => (m.items.push(...s.items), m), addToUi: () => (calls.menu = m.items) }; return m; },
   };
   // ---------- UrlFetch ----------
@@ -369,7 +371,7 @@ function makeEnv(opts = {}) {
       ProtectionType: { SHEET: 'SHEET', RANGE: 'RANGE' }, newDataValidation: () => new DVB(), newConditionalFormatRule: () => new CFB(),
       DataValidationCriteria: { VALUE_IN_LIST: 'VALUE_IN_LIST', VALUE_IN_RANGE: 'VALUE_IN_RANGE' },
       CopyPasteType: { PASTE_FORMAT: 'PASTE_FORMAT', PASTE_DATA_VALIDATION: 'PASTE_DATA_VALIDATION' } },
-    HtmlService: { createHtmlOutput: html => ({ html, setWidth() { return this; }, setHeight() { return this; } }) },
+    HtmlService: { createHtmlOutput: html => ({ html, setWidth() { return this; }, setHeight() { return this; }, setTitle(t) { this.title = t; return this; } }) },
     DriveApp, DocumentApp, ScriptApp, UrlFetchApp, Utilities, CalendarApp, Session: { getScriptTimeZone: () => scriptTz },
     PropertiesService: { getDocumentProperties: () => docProps, getUserProperties: () => userProps },
     LockService: { getScriptLock: () => ({ tryLock: () => { if (opts.lockBusy || locked) return false; locked = true; return true; }, releaseLock: () => { locked = false; } }),

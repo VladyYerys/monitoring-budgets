@@ -31,6 +31,9 @@
     "src/41_Steps.gs",
     "src/42_Modules.gs",
     "src/43_Update.gs",
+    "src/44_Connect.gs",
+    "src/45_ConnectUi.gs",
+    "src/46_Qr.gs",
     "src/90_Menu.gs"
   ]
 }

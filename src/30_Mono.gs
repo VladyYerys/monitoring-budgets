@@ -110,7 +110,7 @@ function connectMono() {
     main ? 'Зараз на основній картці <b>' + money_((main.balance - main.creditLimit) / 100) + '</b>' + (Number(main.creditLimit) ? ', кредитний ліміт <b>' +
       money_(main.creditLimit / 100) + '</b>' : '') + '.' : '',
     'Вид рахунку можна змінити на аркуші «' + ACC_SHEET + '». Далі: «🏦 Імпорт з банку зараз» (перший імпорт: сьогодні й 2 попередні дні).',
-    'Щодня самі: «⚙️ Налаштування → 🏦 Імпорт за розкладом: увімкнути» (' + IMPORT_SLOTS + ').']);
+    'Щодня самі: «🚀 Підключення», крок 1, «Імпорт з банку щодня» (' + IMPORT_SLOTS + ').']);
 }
 
 function disconnectMono() {
@@ -123,7 +123,7 @@ function disconnectMono() {
 function enableDailyImport() {
   if (!menuOk_('🏦 Імпорт за розкладом')) return;
   const up = PropertiesService.getUserProperties();
-  if (!up.getProperty('mono_token') && !up.getProperty('pb_token')) { show_('🏦 Імпорт за розкладом', ['Спершу підключіть Mono або ПриватБанк («⚙️ Налаштування»).']); return; }
+  if (!up.getProperty('mono_token') && !up.getProperty('pb_token')) { show_('🏦 Імпорт за розкладом', ['Спершу підключіть Mono або ПриватБанк («🚀 Підключення», крок 1).']); return; }
   importTriggers_(SpreadsheetApp.getActive().getSpreadsheetTimeZone());
   show_('🏦 Імпорт за розкладом', ['Увімкнено: щодня близько <b>' + IMPORT_SLOTS + '</b> (для ваших рахунків; кожен учасник сім\'ї вмикає свій).',
     tgReady_() ? 'Після кожного імпорту: повідомлення в Telegram.' : 'Telegram не підключено: повідомлень не буде.',
@@ -201,7 +201,7 @@ function importBank_(ss) {
   const jobs = [];
   if (up.getProperty('mono_token') && monoAccs_().length) jobs.push(['Mono', importMono_]);
   if (up.getProperty('pb_token')) jobs.push(['ПриватБанк', importPrivat_]);
-  if (!jobs.length) throw new Error('Банк не підключено: «⚙️ Налаштування → 🏦 Підключити Mono» або «🏦 Підключити ПриватБанк (ФОП)».');
+  if (!jobs.length) throw new Error('Банк не підключено: «🚀 Підключення», крок 1 (Mono, ПриватБанк для ФОП або виписка).');
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(60 * 1000)) throw new Error('Інша дія скрипта ще триває, спробуйте за хвилину.');
   const rep = emptyReport_(), errs = [];

@@ -104,7 +104,7 @@ function buildSettings_(ss) {
   settingsRate_(sh);
   sh.getRange(SET.start).setNumberFormat('dd.mm.yyyy');
   sh.getRange(SET.card).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList([CARD_CREDIT, CARD_DEBIT]).setAllowInvalid(false).build());
-  sh.getRange(11, 1).setValue('Токени банку й Telegram тут не зберігаються: лише в налаштуваннях скрипта у вашому Google-акаунті (меню «⚙️ Налаштування»).')
+  sh.getRange(11, 1).setValue('Токени банку й Telegram тут не зберігаються: лише в налаштуваннях скрипта у вашому Google-акаунті (меню «🚀 Підключення»).')
     .setFontColor('#5f6368');
   settingsFamily_(sh);
   settingsExtra_(sh);

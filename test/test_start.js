@@ -1,31 +1,41 @@
-// «🚀 Почати»: майстер, чекліст «Старту», демо-місяць і його очищення; сім'я (учасники, «Хто», бюджети, група в Telegram); оновлення таблиці версії 4.
+// «🚀 Підключення»: панель, чекліст «Старту», демо-місяць і його очищення; сім'я (учасники, «Хто», бюджети, група в Telegram); оновлення таблиці версії 4.
 const assert = require('assert'), vm = require('vm');
 const { makeEnv } = require('./gasmock');
+const { panelSetup } = require('./panel');
 let n = 0; const t = (name, fn) => { fn(); n++; console.log('ok', name); };
 const BOT = '123456789:' + 'B'.repeat(35);
 
-t('wizard in an empty table: builds, family of two, debit card, FOP, drops sets, demo month; checklist updated', () => {
-  const env = makeEnv({ promptText: ['2', 'Олена, Іван', '2', '1', 'Олена:3', '1, 2', '', '', 'так'] }), c = env.ctx;
+t('«🚀 Підключення» in an empty table: builds, opens the side panel; family of two, debit card, income day, FOP group, demo month; checklist updated', () => {
+  const env = makeEnv(), c = env.ctx;
   env.ss.insertSheet('Аркуш1');
   c.startWizard();
+  const sb = env.calls.sidebars.pop();
+  assert.strictEqual(sb.t, '🚀 Підключення');
+  ['Додайте картку', 'Сповіщення в Telegram', 'Регулярні платежі', 'Передайте Gemini', 'google.script.run'].forEach(x => assert.ok(sb.html.indexOf(x) >= 0, x));
+  assert.ok(!/\$\{/.test(sb.html), 'без незаміщених ${…}');
+  let s = c.cnState();
+  assert.strictEqual(s.family, false); assert.strictEqual(s.bank.accounts.length, 0); assert.ok(/<svg/.test(s.qrBotFather));
+  assert.ok(s.cats.some(x => x.name === 'Продукти'));
+  s = c.cnMode(true, 'Олена, Іван');
+  assert.strictEqual(JSON.stringify(s.who), JSON.stringify(['Олена', 'Іван', 'спільне']));
+  c.cnCard(false); c.cnBday(1); c.cnFop('3', 'Олена');
+  assert.throws(() => c.cnBday(40), /від 1 до 31/);
+  assert.throws(() => c.cnFop('4', 'Олена'), /1, 2 або 3/);
+  c.cnDemo(true);
+  const fin = c.cnFinish();
+  assert.ok(fin.need > 0);
   const set = env.ss.getSheetByName('Налаштування');
   assert.strictEqual(set.getRange('B13').getValue(), 'сім\'я');
   assert.strictEqual(JSON.stringify(set.getRange('B14:B16').getValues().map(r => r[0])), JSON.stringify(['Олена', 'Іван', '']));
   assert.strictEqual(set.getRange('B7').getValue(), 'дебетова');
   assert.strictEqual(set.getRange('B5').getValue(), 1);
   assert.strictEqual(JSON.stringify(env.ss.getSheetByName('ФОП').getRange('A14:E14').getValues()[0]), JSON.stringify(['Олена', '3', '', 'так', 'так']));
-  const cats = env.ss.getSheetByName('Довідник').getRange('A5:A84').getValues().map(r => r[0]);
-  assert.ok(cats.indexOf('Діти') >= 0 && cats.indexOf('Тварини') >= 0, 'набори 1 і 2 лишились');
-  assert.ok(cats.indexOf('Пальне') < 0 && cats.indexOf('Оренда житла') < 0, 'авто й оренду прибрано');
-  assert.ok(cats.indexOf('ЄСВ') >= 0, 'ФОП є: податкові категорії лишились');
-  assert.ok(!env.ss.getSheetByName('Правила').getRange('E5:E204').getValues().some(r => r[0] === 'Пальне'), 'правила прибраних категорій теж');
   const rows = c.readJournal_(env.ss).filter(o => !o.blank);
   assert.ok(rows.length > 30 && rows.every(o => o.d.indexOf('[демо] ') === 0 || o.d.indexOf('[Регулярний] [демо] ') === 0));
   assert.ok(rows.some(o => o.d.indexOf('[Регулярний] [демо] Комуналка: ') === 0 && o.e === '🔁 план регулярний'), 'демо-правила «Регулярних» стали планами');
   assert.ok(rows.some(o => o.g === 'Олена') && rows.some(o => o.g === 'спільне'), 'у сім\'ї демо розкладене за «Хто»');
   const st = env.ss.getSheetByName('Старт');
-  assert.strictEqual(st.getRange('A6').getValue(), '✓', 'майстер пройдено');
-  // модулі: рекомендовані для дебетової картки з ФОП
+  assert.strictEqual(st.getRange('A6').getValue(), '✓', '«Готово» натиснуто');
   const mod = name => st.getRange('A26:B34').getValues().find(r => r[0] === name)[1];
   assert.strictEqual(mod('💳 Кредитний ліміт і грейс'), 'ні', 'дебетова картка: без ліміту');
   assert.strictEqual(mod('🧾 ФОП'), 'так'); assert.strictEqual(mod('🤝 Борги й розстрочки'), 'ні'); assert.strictEqual(mod('💾 Копії й захист'), 'так');
@@ -35,14 +45,11 @@ t('wizard in an empty table: builds, family of two, debit card, FOP, drops sets,
   assert.ok(env.docProps.getProperty('fop_day'), 'модуль ФОП застосовано: плани податків синхронізовано');
   assert.ok(/^Готово: \d+ з \d+/.test(st.getRange('A3').getValue()));
   assert.ok(['B19', 'B20', 'B21', 'B22', 'B23'].some(a => /HYPERLINK\("https:\/\/send\.monobank\.ua\/jar\//.test(st.getRange(a).getFormula())), 'посилання «Підтримати» під чеклістом');
-  assert.ok(/Готово/.test(env.calls.dialogs.pop().t));
 });
 
 t('demo clear: only «[демо]» rows, its checkpoint, category plans and the start date go back; your row stays', () => {
-  const env = makeEnv({ promptText: ['1', '1', '25', '', '', '', '', 'так'] }), c = env.ctx;
-  env.ss.insertSheet('Аркуш1');
+  const env = panelSetup(makeEnv(), { credit: true, bday: 25, demo: true }), c = env.ctx;
   const set = () => env.ss.getSheetByName('Налаштування');
-  c.startWizard();
   const j = env.ss.getSheetByName('Журнал'), key = v => env.Utilities.formatDate(v, 'Europe/Kiev', 'yyyy-MM-dd');
   const startBefore = env.Utilities.formatDate(new Date(), 'Europe/Kiev', 'yyyy-MM') + '-01';
   assert.ok(key(set().getRange('B4').getValue()) < startBefore, 'демо зсунуло старт обліку на минулий місяць');

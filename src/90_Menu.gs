@@ -15,9 +15,9 @@ function onOpen() {
     return;
   }
   try { schemaToast_(ss); } catch (e) { /* підказка не критична */ }
-  try { if (!PropertiesService.getDocumentProperties().getProperty('wiz_done')) ss.toast('Почніть з «📊 ' + APP_NAME + ' → 🚀 Почати».', '🚀 Старт', 10); else supportToast_(ss); } catch (e) { /* ignore */ }
+  try { if (!PropertiesService.getDocumentProperties().getProperty('wiz_done')) ss.toast('Почніть з «📊 ' + APP_NAME + ' → 🚀 Підключення».', '🚀 Старт', 10); else supportToast_(ss); } catch (e) { /* ignore */ }
   ui.createMenu('📊 ' + APP_NAME)
-    .addItem('🚀 Почати (майстер)', 'startWizard')
+    .addItem('🚀 Підключення', 'startWizard')
     .addItem('🔃 Упорядкувати журнал зараз', 'sortNow')
     .addItem('🏦 Імпорт з банку зараз', 'importNow')
     .addItem('📥 Імпорт виписок з папки', 'importStatements')
@@ -39,22 +39,6 @@ function onOpen() {
     .addItem('🩺 Стан таблиці', 'tableStatus')
     .addItem('🧩 Модулі: застосувати', 'modulesNow')
     .addItem('✓ Оновити чекліст «Старту»', 'startNow')
-    .addSubMenu(ui.createMenu('⚙️ Налаштування')
-      .addItem('🏦 Підключити Mono (токен)', 'connectMono')
-      .addItem('🏦 Імпорт за розкладом: увімкнути', 'enableDailyImport')
-      .addItem('🏦 Імпорт за розкладом: вимкнути', 'disableDailyImport')
-      .addItem('🏦 Відключити Mono (стерти токен)', 'disconnectMono')
-      .addItem('🏦 Підключити ПриватБанк (ФОП, «Автоклієнт»)', 'connectPrivat')
-      .addItem('🏦 Відключити ПриватБанк (стерти токен)', 'disconnectPrivat')
-      .addSeparator()
-      .addItem('📨 Підключити Telegram-бота', 'connectTelegram')
-      .addItem('📨 Вимкнути Telegram (стерти токен)', 'disconnectTelegram')
-      .addSeparator()
-      .addItem('📆 Календар платежів: увімкнути / оновити', 'calendarOn')
-      .addItem('📆 Календар платежів: вимкнути', 'calendarOff')
-      .addSeparator()
-      .addItem('🛡 Захист з попередженням: увімкнути', 'protectionOnMenu')
-      .addItem('🛡 Прибрати захист', 'removeProtection'))
     .addSubMenu(ui.createMenu('🛠 Оновлення таблиці')
       .addItem('🔎 Чи вийшла нова версія шаблону', 'versionNow')
       .addItem('📦 Перенести дані зі старої копії', 'migrateFromOld')
@@ -71,7 +55,7 @@ function setupTemplate() {
   try { r = schemaRun_(ss, { allowEmpty: true }); } catch (e) { show_('🚀 Шаблон', ['⚠️ ' + esc_(e.message)]); return; }
   try { const j = ss.getSheetByName(JOURNAL); if (j && ss.setActiveSheet) ss.setActiveSheet(j); } catch (e) { /* ignore */ }
   show_('🚀 Шаблон готовий', r.lines.concat(['Далі: «' + SETTINGS_SHEET + '» (старт обліку «моїх грошей», картка), «' + CP_SHEET + '» (залишок на картці сьогодні) або ' +
-    '«⚙️ Налаштування → 🏦 Підключити Mono»; потім пишіть у «' + JOURNAL + '».']));
+    '«🚀 Підключення» (картка, Telegram, регулярні, Gemini); потім пишіть у «' + JOURNAL + '».']));
 }
 
 /** При відкритті: одна підказка, якщо оновлення зупинилось або чекає. */

@@ -53,7 +53,7 @@ function stepBank_(ss) {
   const out = [];
   buildIfMissing_(ss, RULES_SHEET, buildRules_, out);
   buildIfMissing_(ss, BANK_SHEET, buildBankLog_, out);
-  return out.length ? ['Додано: ' + out.join(', ') + '. Підключити Mono: «⚙️ Налаштування → 🏦 Підключити Mono».'] : ['Усе вже було.'];
+  return out.length ? ['Додано: ' + out.join(', ') + '. Підключити банк: «🚀 Підключення», крок 1.'] : ['Усе вже було.'];
 }
 
 function stepMain_(ss) {
