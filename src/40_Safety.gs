@@ -29,7 +29,8 @@ function protectList_() {
     { sheet: START_SHEET, allow: ['B' + MOD_FIRST + ':B' + (MOD_FIRST + MODS.length - 1)] },
     { sheet: REG_SHEET, allow: ['A' + REG_FIRST + ':I' + REG_LAST] },
     { sheet: CH_SHEET, allow: [] },
-    { sheet: PHONE_SHEET, allow: [] },
+    { sheet: DASH_SHEET, allow: [colStr_(DASH_LIMIT_COL) + (DASH_HOLE_HEAD + 1) + ':' + colStr_(DASH_LIMIT_COL) + (DASH_HOLE_HEAD + CH_HOLES)] },
+    { sheet: MOB_SHEET, allow: [] },
   ];
 }
 

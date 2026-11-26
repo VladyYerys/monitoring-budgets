@@ -37,12 +37,16 @@ function monthsSummaryRows_() {
   return out;
 }
 
-/** Картка на кінець дня x (формула-рядок): остання контрольна точка ≤ x + усі рухи журналу від неї до x. */
+/**
+ * Картка на кінець дня x (формула-рядок): остання контрольна точка ≤ x + усі рухи журналу від неї до x.
+ * До першої контрольної точки: назад від найближчої наступної (точка мінус рухи між x і нею), як в особистій таблиці;
+ * так історія, завантажена з банку до першої точки, має справжній залишок, а не відлік від нуля. Точок немає: рухи від нуля.
+ */
 function cardAt_(x) {
   const cpA = CP_RANGE('A'), cpB = CP_RANGE('B'), L = J_RANGE(JC.signed), A = J_RANGE(JC.date);
-  const last = 'MAXIFS(' + cpA + ',' + cpA + ',"<="&' + x + ',' + cpB + ',"<>")';
-  return 'IF(' + last + '=0,SUMIFS(' + L + ',' + A + ',"<="&' + x + '),SUMIFS(' + cpB + ',' + cpA + ',' + last + ')+SUMIFS(' + L + ',' + A + ',">="&' + last +
-    ',' + A + ',"<="&' + x + '))';
+  const last = 'MAXIFS(' + cpA + ',' + cpA + ',"<="&' + x + ',' + cpB + ',"<>")', next = 'MINIFS(' + cpA + ',' + cpA + ',">"&' + x + ',' + cpB + ',"<>")';
+  return 'IF(' + last + '=0,IF(' + next + '=0,SUMIFS(' + L + ',' + A + ',"<="&' + x + '),SUMIFS(' + cpB + ',' + cpA + ',' + next + ')-SUMIFS(' + L + ',' + A + ',">"&' + x +
+    ',' + A + ',"<"&' + next + ')),SUMIFS(' + cpB + ',' + cpA + ',' + last + ')+SUMIFS(' + L + ',' + A + ',">="&' + last + ',' + A + ',"<="&' + x + '))';
 }
 
 function monthsSummaryFormula_(kind, param, colL, r, rows, firstSumRow) {

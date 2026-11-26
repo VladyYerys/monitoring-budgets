@@ -15,15 +15,15 @@ const allFormulas = env => env.ss.getSheets().flatMap(sh => Array.from(sh.cells.
 t('all sheets, the empty starter sheet removed, marked as template, success dialog', () => {
   const env = built();
   assert.strictEqual(JSON.stringify(env.ss.getSheets().map(s => s.getName())), JSON.stringify(
-    ['Старт', 'Головне', 'Журнал', 'Регулярні', 'Місяці', 'Дні', '📱 Телефон', 'ФОП', 'Борги', 'Довідник', 'Налаштування', 'Правила', 'Рахунки', 'Залишки банку', 'Банк',
-      'Історія місяців', 'Історія категорій', 'Перевірка', 'Дані графіків']));
+    ['Старт', 'Charts', 'charts_mob', 'Журнал', 'Регулярні', 'Місяці', 'Дні', 'ФОП', 'Борги', 'Довідник', 'Налаштування', 'Головне', 'Правила', 'Рахунки', 'Залишки банку',
+      'Банк', 'Історія місяців', 'Історія категорій', 'Перевірка', 'Дані графіків']));
   const hidden = env.ss.getSheets().filter(s => s.isSheetHidden()).map(s => s.getName());
-  assert.strictEqual(JSON.stringify(hidden), JSON.stringify(['ФОП', 'Борги', 'Правила', 'Рахунки', 'Залишки банку', 'Банк', 'Історія місяців', 'Історія категорій', 'Перевірка',
-    'Дані графіків']), 'на виду лише робочі вкладки: ' + hidden);
+  assert.strictEqual(JSON.stringify(hidden), JSON.stringify(['ФОП', 'Борги', 'Головне', 'Правила', 'Рахунки', 'Залишки банку', 'Банк', 'Історія місяців', 'Історія категорій',
+    'Перевірка', 'Дані графіків']), 'на виду лише робочі вкладки: ' + hidden);
   assert.strictEqual(env.docProps.getProperty('mbs'), 'monitoring-budgets-template');
   assert.strictEqual(env.docProps.getProperty('schema_v'), String(env.ctx.schemaLast_()));
   assert.strictEqual(env.ss.getSheetByName('Налаштування').getRange('A40').getValue(), 'monitoring-budgets-template');
-  const dlg = env.calls.dialogs.pop(); assert.ok(/Шаблон готовий/.test(dlg.t) && /версію <b>8<\/b>/.test(dlg.html), dlg.t + dlg.html);
+  const dlg = env.calls.dialogs.pop(); assert.ok(/Шаблон готовий/.test(dlg.t) && /версію <b>9<\/b>/.test(dlg.html), dlg.t + dlg.html);
   assert.strictEqual(env.files.length, 0, 'у порожній таблиці копія перед змінами не потрібна');
 });
 
@@ -107,8 +107,10 @@ t('rules, bank log, main (labels the bot reads), checks, charts, schedules, prot
   const main = env.ss.getSheetByName('Головне'), labels = main.getRange('A4:A40').getValues().map(x => x[0]);
   ['Доступно моїх сьогодні', 'Можна на день', 'На картці зараз', 'Прогноз на кінець місяця (за планом)', 'Чернеток чекають підтвердження', 'Межа «близько до ліміту»']
     .forEach(l => assert.ok(labels.indexOf(l) >= 0, l));
-  assert.strictEqual(main.charts.length, 10, 'сітка графіків (з модулем ліміту)');
-  assert.strictEqual(env.ss.getSheetByName('📱 Телефон').charts.length, 8, 'телефон: без двох лише-настільних');
+  assert.strictEqual((main.charts || []).length, 0, 'графіки переїхали на «Charts»');
+  assert.strictEqual(env.ss.getSheetByName('Charts').charts.length, 11, '«Charts»: усі графіки (з модулем ліміту)');
+  assert.strictEqual(env.ss.getSheetByName('charts_mob').charts.length, 8, '«charts_mob»: вісім графіків');
+  assert.ok(!env.ss.getSheetByName('📱 Телефон'), '«📱 Телефон» більше не будується');
   assert.ok(/Доступно моїх сьогодні/.test(env.ss.getSheetByName('Журнал').getRange('B1').getFormula()));
   const chk = env.ss.getSheetByName('Перевірка');
   assert.ok(/ПЕРЕВІРИТИ/.test(chk.getRange('B2').getFormula()) && chk.getRange('B5').getFormula());

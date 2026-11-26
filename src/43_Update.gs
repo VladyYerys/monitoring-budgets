@@ -97,6 +97,7 @@ function migratePlan_() {
     { sheet: FOP_SHEET, ranges: [rows('A' + FOP_RATE_FIRST, 'L' + FOP_RATE_LAST), rows('A' + FOP_FIRST, 'E' + FOP_LAST), FOP_YEAR, rows('J' + FOP_Q_FIRST, 'K' + (FOP_Q_FIRST + 19))] },
     { sheet: DEBTS_SHEET, ranges: [rows('A' + DEBT_FIRST, 'H' + DEBT_LAST)] },
     { sheet: REG_SHEET, ranges: [rows('A' + REG_FIRST, 'I' + REG_LAST)] },
+    { sheet: DASH_SHEET, ranges: [rows(colStr_(DASH_LIMIT_COL) + (DASH_HOLE_HEAD + 1), colStr_(DASH_LIMIT_COL) + (DASH_HOLE_HEAD + CH_HOLES))] },
     { sheet: START_SHEET, mods: true },
     { sheet: HISTORY_SHEET, history: H_COLS.length },
     { sheet: H_CAT_SHEET, history: 6 },

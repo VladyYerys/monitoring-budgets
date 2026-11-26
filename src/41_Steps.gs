@@ -24,15 +24,17 @@ const STEPS = [
       mainHasLabel_(ss, 'Грейс: строк') &&
       String(ss.getSheetByName(SETTINGS_SHEET).getRange('A22').getValue()) === 'Радник і нагадування' },
   { v: 7, title: '🧭 Шапка журналу: мої, бюджети зі смужками, прогноз, грейс', auto: ss => stepHeader_(ss), done: ss => headerIsNew_(ss) },
-  { v: 8, title: '🗂 Менше вкладок: «Регулярні», графіки на «Головному» й «📱 Телефоні», службові аркуші сховано', auto: ss => stepTabs_(ss),
-    done: ss => [REG_SHEET, CH_SHEET, PHONE_SHEET].every(n => !!ss.getSheetByName(n)) && modBlockFull_(ss) },
+  { v: 8, title: '🗂 Менше вкладок: «Регулярні», «Дані графіків», службові аркуші сховано', auto: ss => stepTabs_(ss),
+    done: ss => [REG_SHEET, CH_SHEET].every(n => !!ss.getSheetByName(n)) && modBlockFull_(ss) },
+  { v: 9, title: '📊 «Charts» і «charts_mob» (темні дашборди) замість «Головного» й «📱 Телефону»', auto: ss => stepDash_(ss),
+    done: ss => [DASH_SHEET, MOB_SHEET].every(n => !!ss.getSheetByName(n)) && !ss.getSheetByName(PHONE_SHEET) && !chartsDataOld_(ss) },
 ];
 /** Остання версія таблиці в цьому коді. */
 function schemaLast_() { return STEPS[STEPS.length - 1].v; }
 const SCHEMA_RETRY_MS = 6 * 3600 * 1000;
 /** Порядок вкладок: робочі зліва, службові (зазвичай сховані) справа. */
-const SHEET_ORDER = [START_SHEET, MAIN_SHEET, JOURNAL, REG_SHEET, MONTHS_SHEET, DAYS_SHEET, PHONE_SHEET, FOP_SHEET, DEBTS_SHEET, DICT_SHEET, SETTINGS_SHEET,
-  RULES_SHEET, ACC_SHEET, CP_SHEET, BANK_SHEET, HISTORY_SHEET, H_CAT_SHEET, CHECK_SHEET, CH_SHEET];
+const SHEET_ORDER = [START_SHEET, DASH_SHEET, MOB_SHEET, JOURNAL, REG_SHEET, MONTHS_SHEET, DAYS_SHEET, FOP_SHEET, DEBTS_SHEET, DICT_SHEET, SETTINGS_SHEET,
+  MAIN_SHEET, RULES_SHEET, ACC_SHEET, CP_SHEET, BANK_SHEET, HISTORY_SHEET, H_CAT_SHEET, CHECK_SHEET, CH_SHEET];
 
 function buildIfMissing_(ss, name, fn, out) { if (!ss.getSheetByName(name)) { fn(ss); out.push('«' + name + '» ✓'); } }
 
@@ -120,17 +122,13 @@ function stepHeader_(ss) {
 }
 
 /**
- * Версія 8: аркуш «Регулярні» (плани з правил), «Дані графіків» (схований), графіки на «Головному» сіткою, «📱 Телефон»,
- * модуль «🗂 Службові аркуші» (типово «ні»: службові аркуші сховано), вкладки в новому порядку. Ваші дані не змінюються.
+ * Версія 8: аркуш «Регулярні» (плани з правил), «Дані графіків» (схований), модуль «🗂 Службові аркуші»
+ * (типово «ні»: службові аркуші сховано), вкладки в новому порядку. Ваші дані не змінюються.
  */
 function stepTabs_(ss) {
   const out = [];
   buildIfMissing_(ss, REG_SHEET, buildRegular_, out);
-  if (ss.getSheetByName(MAIN_SHEET)) {
-    if (!ss.getSheetByName(CH_SHEET)) buildChartsData_(ss);
-    out.push('«' + MAIN_SHEET + '»: графіків ' + chartsMain_(ss));
-  }
-  if (ss.getSheetByName(MAIN_SHEET)) buildIfMissing_(ss, PHONE_SHEET, buildPhone_, out);
+  if (ss.getSheetByName(DAYS_SHEET) && ss.getSheetByName(DICT_SHEET) && !ss.getSheetByName(CH_SHEET)) { buildChartsData_(ss); out.push('«' + CH_SHEET + '» (схований)'); }
   if (ss.getSheetByName(START_SHEET) && !modBlockFull_(ss)) { modBlockAdd_(ss); out.push('модуль «' + modName_('service') + '» на «' + START_SHEET + '»'); }
   if (PropertiesService.getDocumentProperties().getProperty('prot') !== 'off' && modOn_('backup')) applyProtection_(ss);
   try { sheetsReorder_(ss); } catch (e) { /* порядок вкладок не критичний */ }
@@ -138,6 +136,28 @@ function stepTabs_(ss) {
   sheetsVisibility_(ss);
   return (out.length ? ['Додано: ' + out.join(', ') + '.'] : ['Усе вже було.'])
     .concat(lines.filter(l => l.indexOf('Змін немає') < 0), [modOn_('service') ? 'Службові аркуші видно.' : 'Службові аркуші сховано: показати на «' + START_SHEET + '», «' + modName_('service') + '»: так.']);
+}
+
+/**
+ * Версія 9: «Charts» (комп'ютер) і «charts_mob» (телефон) у темному стилі, як в особистій таблиці: плитки, таблиці, графіки.
+ * «Дані графіків» нової будови; «Головне» стає службовим (його цифри читають Telegram і шапка журналу), графіки з нього прибрано;
+ * «📱 Телефон» видалено (там були лише формули й графіки). Ваші дані не змінюються.
+ */
+function stepDash_(ss) {
+  if (!ss.getSheetByName(DAYS_SHEET) || !ss.getSheetByName(DICT_SHEET)) return ['«' + DAYS_SHEET + '» чи «' + DICT_SHEET + '» ще немає: дашборди додасть збирання таблиці.'];
+  const out = [];
+  buildChartsData_(ss);
+  const n = dashRefresh_(ss);
+  out.push('«' + DASH_SHEET + '» і «' + MOB_SHEET + '»: графіків ' + n);
+  const main = ss.getSheetByName(MAIN_SHEET);
+  if (main) { dashRemoveOurs_(main, CH_OLD_TITLES); out.push('«' + MAIN_SHEET + '» тепер службовий (графіки переїхали)'); }
+  const ph = ss.getSheetByName(PHONE_SHEET);
+  if (ph && ss.getSheets().length > 1) { ss.deleteSheet(ph); out.push('«' + PHONE_SHEET + '» видалено: замість нього «' + MOB_SHEET + '»'); }
+  if (PropertiesService.getDocumentProperties().getProperty('prot') !== 'off' && modOn_('backup')) applyProtection_(ss);
+  try { sheetsReorder_(ss); } catch (e) { /* порядок вкладок не критичний */ }
+  sheetsVisibility_(ss);
+  try { if (ss.setActiveSheet) ss.setActiveSheet(ss.getSheetByName(DASH_SHEET)); } catch (e) { /* ignore */ }
+  return out;
 }
 
 /** Блок модулів має рядок для кожного модуля (нові модулі дописуються в кінець). */

@@ -1,14 +1,15 @@
-/** 23_Main.gs: «Головне»: шапка з головними цифрами, графіки; коротка шапка над журналом. */
+/** 23_Main.gs: «Головне»: головні цифри підписами (службовий аркуш для Telegram, шапки журналу, звітів); коротка шапка над журналом. */
 
 /*
  * Колонка A: підпис, B: значення (формула), C: що це. Telegram, звіти й «Перевірка» читають значення за підписом
  * (mainByLabel_), тож рядки можна переставляти, а підписи міняти не варто.
  * Звідки: «Дні» (картка, борг, ліміт, «мої», прогнози) і журнал (місяць, чернетки, червоні рядки).
- * Графіки (27_Charts.gs): сітка у дві колонки від рядка 18 праворуч від таблиці; таблиця E3:G15 живить графік «Витрати по місяцях».
+ * Графіки й плитки тепер на «Charts» і «charts_mob» (28_Dash.gs); «Головне» сховане разом зі службовими аркушами.
+ * Таблиця E3:G15: витрати по місяцях року (план і факт) з «Місяців».
  */
 
 const MAIN_FIRST = 4;
-const MAIN_TABLE_COL = 5;                                 // E: таблиця для графіка місяців (місяць, план, факт)
+const MAIN_TABLE_COL = 5;                                 // E: витрати по місяцях (місяць, план, факт)
 
 function dayAt_(col, x) {
   const last = DAYS_FIRST + DAYS_ROWS - 1;
@@ -104,13 +105,13 @@ function mainDebtRows_() {
 function buildMain_(ss) {
   const sh = sheetOf_(ss, MAIN_SHEET), rows = mainRows_();
   sh.getRange(1, 1).setValue('🧭 Головне').setFontWeight('bold').setFontSize(14);
-  sh.getRange(2, 1).setValue('Головні цифри на сьогодні. Рахують формули з «Днів» і журналу; нічого вводити не треба.').setFontColor('#5f6368');
+  sh.getRange(2, 1).setValue('Головні цифри на сьогодні (службовий аркуш: їх читають Telegram і шапка журналу). Графіки: «' + DASH_SHEET + '» і «' + MOB_SHEET + '».').setFontColor('#5f6368');
   sh.getRange(MAIN_FIRST - 1, 1, 1, 3).setValues([['Показник', 'Значення', 'Що це']]).setFontWeight('bold');
   sh.getRange(MAIN_FIRST, 1, rows.length, 1).setValues(rows.map(r => [r[0]]));
   setF_(sh.getRange(MAIN_FIRST, 2, rows.length, 1), rows.map(r => [r[1]]));
   sh.getRange(MAIN_FIRST, 3, rows.length, 1).setValues(rows.map(r => [r[3]])).setFontColor('#5f6368');
   rows.forEach((r, i) => sh.getRange(MAIN_FIRST + i, 2).setNumberFormat(r[2]));
-  // таблиця для графіка «Витрати по місяцях»: рік з «Місяців»
+  // витрати по місяцях: рік з «Місяців»
   const spend = monthsSummaryRow_(T_SPEND), t0 = MAIN_TABLE_COL, head = MAIN_FIRST - 1;
   sh.getRange(head, t0, 1, 3).setValues([['Місяць', 'Витрати: план', 'Витрати: факт']]).setFontWeight('bold');
   const tbl = [];
@@ -121,11 +122,9 @@ function buildMain_(ss) {
   setF_(sh.getRange(head + 1, t0, 12, 3), tbl);
   sh.getRange(head + 1, t0, 12, 1).setNumberFormat('mmm yyyy');
   sh.getRange(head + 1, t0 + 1, 12, 2).setNumberFormat('#,##0');
-  mainCharts_(ss);
+  dashRemoveOurs_(sh, CH_OLD_TITLES);                              // графіки версії 8 переїхали на «Charts»
   journalHeader_(ss);
   sh.setFrozenRows(MAIN_FIRST - 1);
   return sh;
 }
 
-/** Графіки на «Головному»: 27_Charts.gs (замінює свої, чужі не чіпає). */
-function mainCharts_(ss) { return chartsMain_(ss); }

@@ -135,8 +135,9 @@ t('everything off: a plain journal with «Місяці», «Дні» and charts;
   c.mbsTick();                                                            // правку пропущено: застосує розклад
   assert.ok(K(c, 'MODS').every(m => c.modOn_(m.id) === false));
   assert.strictEqual(JSON.stringify(env.triggers.map(x => x.getHandlerFunction()).sort()), JSON.stringify(['mbsEdit', 'mbsTick']));
-  ['Журнал', 'Місяці', 'Дні', 'Головне'].forEach(n => assert.strictEqual(env.ss.getSheetByName(n).isSheetHidden(), false, n));
-  assert.ok(env.ss.getSheetByName('Головне').charts.length >= 2);
+  ['Журнал', 'Місяці', 'Дні', 'Charts', 'charts_mob'].forEach(n => assert.strictEqual(env.ss.getSheetByName(n).isSheetHidden(), false, n));
+  assert.strictEqual(env.ss.getSheetByName('Головне').isSheetHidden(), true, '«Головне»: службовий');
+  assert.ok(env.ss.getSheetByName('Charts').charts.length >= 6 && env.ss.getSheetByName('charts_mob').charts.length >= 4);
   const r = c.buildMorning_(env.ss, {});
   assert.ok(!/Нічна копія/.test(r.text), 'самоперевірка не скаржиться на вимкнені копії');
   c.modulesNow();

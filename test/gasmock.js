@@ -80,6 +80,10 @@ function makeEnv(opts = {}) {
   S.showColumns = function (c, n) { this.hidden = this.hidden.filter(h => !(h[0] === c && h[1] === n)); this.shownCols = (this.shownCols || []).concat([[c, n]]); };
   S.isColumnHiddenByUser = function (c) { return this.hidden.some(h => c >= h[0] && c < h[0] + h[1]); };
   S.setFrozenRows = function () { }; S.setFrozenColumns = function () { }; S.setColumnWidth = function () { }; S.setRowHeight = function () { };
+  S.setColumnWidths = function () { return this; }; S.setRowHeights = function () { return this; };
+  S.setHiddenGridlines = function (v) { this.noGrid = !!v; return this; };
+  S.deleteRows = function (r, n) { for (const k of Array.from(this.cells.keys())) if (+k.split(',')[0] >= r) this.cells.delete(k); this.maxR -= n; };
+  S.deleteColumns = function (c, n) { for (const k of Array.from(this.cells.keys())) if (+k.split(',')[1] >= c) this.cells.delete(k); this.maxC -= n; };
   S.hideSheet = function () { this.hiddenSheet = true; return this; };
   S.showSheet = function () { this.hiddenSheet = false; return this; };
   S.isSheetHidden = function () { return !!this.hiddenSheet; };
@@ -172,6 +176,7 @@ function makeEnv(opts = {}) {
     if (type === 'PASTE_DATA_VALIDATION') { const d = this.getDataValidation(); if (d) dst.setDataValidation(d); }
   };
   R.clearContent = function () { for (let i = 0; i < this.nr; i++) for (let j = 0; j < this.nc; j++) this.sh.cells.delete(this.sh.key(this.r + i, this.c + j)); return this; };
+  R.mergeAcross = function () { for (let i = 0; i < this.nr; i++) this.sh.getRange(this.r + i, this.c, 1, this.nc).merge(); return this; };
   R.merge = function () { this.sh.merges = this.sh.merges || []; if (this.sh.merges.indexOf(this.getA1Notation()) < 0) this.sh.merges.push(this.getA1Notation()); return this; };
   R.setNumberFormat = function (f) {
     for (let i = 0; i < this.nr; i++) for (let j = 0; j < this.nc; j++) {
@@ -366,7 +371,7 @@ function makeEnv(opts = {}) {
     return { getResponseCode: () => r.code, getContentText: () => (typeof r.body === 'string' ? r.body : JSON.stringify(r.body)) };
   } };
   const ctx = {
-    Charts: { ChartType: { LINE: 'LINE', COLUMN: 'COLUMN', AREA: 'AREA', BAR: 'BAR', PIE: 'PIE' } },
+    Charts: { ChartType: { LINE: 'LINE', COLUMN: 'COLUMN', AREA: 'AREA', BAR: 'BAR', PIE: 'PIE', COMBO: 'COMBO' } },
     SpreadsheetApp: { getActive: () => ss, flush: () => {}, openById: id => { if (!others[id]) throw new Error('no spreadsheet ' + id); calls.opened = (calls.opened || []).concat([id]); return others[id]; }, getUi: () => { if (opts.noUi) throw new Error('no ui'); return ui; },
       ProtectionType: { SHEET: 'SHEET', RANGE: 'RANGE' }, newDataValidation: () => new DVB(), newConditionalFormatRule: () => new CFB(),
       DataValidationCriteria: { VALUE_IN_LIST: 'VALUE_IN_LIST', VALUE_IN_RANGE: 'VALUE_IN_RANGE' },

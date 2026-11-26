@@ -21,11 +21,11 @@ const MODS = [
   { id: 'backup', name: '💾 Копії й захист', what: 'нічна копія на Диску; захист аркушів з формулами «з попередженням»', def: true },
   { id: 'fop', name: '🧾 ФОП', what: 'аркуш «' + FOP_SHEET + '»: податки, строки, ліміт доходу групи', def: false },
   { id: 'advisor', name: '🤖 Радник Gemini', what: 'щоденний знімок фінансів на вашому Диску для навички Gemini', def: false },
-  { id: 'service', name: '🗂 Службові аркуші', what: 'показати «' + RULES_SHEET + '», «' + ACC_SHEET + '», «' + CP_SHEET + '», «' + BANK_SHEET +
+  { id: 'service', name: '🗂 Службові аркуші', what: 'показати «' + MAIN_SHEET + '», «' + RULES_SHEET + '», «' + ACC_SHEET + '», «' + CP_SHEET + '», «' + BANK_SHEET +
     '», історію й «' + CHECK_SHEET + '» (схованими вони працюють так само)', def: false },
 ];
 /** Аркуші, які ховає вимкнений модуль «🗂 Службові аркуші». «Дані графіків» схований завжди. */
-const SERVICE_SHEETS = [RULES_SHEET, ACC_SHEET, CP_SHEET, BANK_SHEET, HISTORY_SHEET, H_CAT_SHEET, CHECK_SHEET];
+const SERVICE_SHEETS = [MAIN_SHEET, RULES_SHEET, ACC_SHEET, CP_SHEET, BANK_SHEET, HISTORY_SHEET, H_CAT_SHEET, CHECK_SHEET];
 
 let MODS_CACHE_ = null;
 function modState_() {
@@ -126,7 +126,7 @@ const MOD_APPLY = {
     if (d) { if (on) d.showColumns(6, 3); else d.hideColumns(6, 3); }
     if (m) monthsCreditRows_().forEach(g => { if (on) m.showRows(g[0], g[1]); else m.hideRows(g[0], g[1]); });
     if (headerIsNew_(ss)) journalHeader_(ss);                       // шапка: грейс або «на день»
-    chartsRefresh_(ss);                                             // графіки: з лімітом, боргом і причинами чи без
+    dashRefresh_(ss);                                               // «Charts», «charts_mob»: з лімітом, боргом і причинами чи без
     return on ? 'увімкнено ✓' + (cardIsCredit_(ss) ? '' : ' (на «' + SETTINGS_SHEET + '» картка дебетова: ліміт буде 0)') : 'вимкнено: рядки ліміту й грейсу сховано';
   },
   debts: (ss, on) => {
@@ -138,7 +138,6 @@ const MOD_APPLY = {
   },
   budgets: (ss, on) => {
     if (headerIsNew_(ss)) journalHeader_(ss);                       // шапка: три бюджети або витрати місяця
-    if (ss.getSheetByName(PHONE_SHEET)) buildPhone_(ss);            // «📱 Телефон»: три бюджети
     return on ? 'увімкнено ✓' : 'вимкнено: тривог про бюджети не буде (плани категорій у «' + DICT_SHEET + '» лишаються для «' + MONTHS_SHEET + '»)';
   },
   cal: (ss, on, was) => {

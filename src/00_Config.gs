@@ -8,7 +8,7 @@
  */
 
 const TEMPLATE_MARK = 'monitoring-budgets-template';   // мітка шаблону: її шукає CI перед заливкою (ci/guard.js)
-const TEMPLATE_VERSION = '0.4.3';
+const TEMPLATE_VERSION = '0.4.4';
 const SUPPORT_URL = 'https://send.monobank.ua/jar/6ChdYHjkd9';   // «❤️ Підтримати автора»: публічна банка автора
 const APP_NAME = 'Monitoring Budgets';
 const REPO_URL = 'https://github.com/VladyYerys/monitoring-budgets';                 // відкритий код, «Що нового», питання (issues)
