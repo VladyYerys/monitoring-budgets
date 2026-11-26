@@ -1,0 +1,12 @@
+{
+  "name": "monitoring-budgets",
+  "version": "0.4.0",
+  "private": true,
+  "description": "Шаблон Google Таблиць для обліку сімейного бюджету і ФОП (Google Apps Script)",
+  "license": "MIT",
+  "scripts": {
+    "test": "node test/run_all.js",
+    "privacy": "node tools/privacy_check.js",
+    "bundle": "node tools/bundle.js"
+  }
+}

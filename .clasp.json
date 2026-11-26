@@ -1,0 +1,33 @@
+{
+  "rootDir": "src",
+  "filePushOrder": [
+    "src/00_Config.gs",
+    "src/01_Guard.gs",
+    "src/02_Helpers.gs",
+    "src/10_Journal.gs",
+    "src/11_Dictionary.gs",
+    "src/12_Rules.gs",
+    "src/13_Order.gs",
+    "src/20_Months.gs",
+    "src/21_Days.gs",
+    "src/22_History.gs",
+    "src/23_Main.gs",
+    "src/24_Check.gs",
+    "src/29_Bank.gs",
+    "src/30_Mono.gs",
+    "src/31_Telegram.gs",
+    "src/32_Reports.gs",
+    "src/33_Calendar.gs",
+    "src/34_Privat.gs",
+    "src/35_Statements.gs",
+    "src/36_Fop.gs",
+    "src/37_Debts.gs",
+    "src/38_Start.gs",
+    "src/39_Advisor.gs",
+    "src/40_Safety.gs",
+    "src/41_Steps.gs",
+    "src/42_Modules.gs",
+    "src/43_Update.gs",
+    "src/90_Menu.gs"
+  ]
+}

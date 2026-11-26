@@ -1,0 +1,11 @@
+# секрети й службове: ніколи не в репозиторій
+.clasprc.json
+.clasp.json.local
+remote-before/
+dist/
+node_modules/
+.env
+*.local
+# ваш особистий список слів для перевірки приватності (див. PRIVACY.md): лишається лише на вашому комп'ютері
+.private-denylist.txt
+.DS_Store
