@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Тести
+        run: node test/run_all.js
+      - name: Приватність (секрети, персональні дані, зовнішні адреси)
+        run: node tools/privacy_check.js
+      - name: Весь код одним файлом (для перевірки через ШІ)
+        run: node tools/bundle.js
+      - uses: actions/upload-artifact@v4
+        with:
+          name: monitoring-budgets-all-code
+          path: dist/
+          retention-days: 90
+
+  deploy:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency: apps-script
+    env:
+      CLASPRC_B64: ${{ secrets.CLASPRC_B64 }}
+      SCRIPT_ID: ${{ secrets.SCRIPT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Чи є секрети
+        id: ready
+        run: |
+          if [ -z "$CLASPRC_B64" ] || [ -z "$SCRIPT_ID" ]; then
+            echo "go=no" >> "$GITHUB_OUTPUT"
+            echo "::notice::Заливку пропущено: немає секретів CLASPRC_B64 і SCRIPT_ID (так і має бути, доки ви їх не додали)."
+          else
+            echo "go=yes" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Підготувати clasp
+        if: steps.ready.outputs.go == 'yes'
+        run: node ci/prepare.js
+      - name: Код, що зараз у скрипті (копія на 90 днів)
+        if: steps.ready.outputs.go == 'yes'
+        run: cd remote-before && npx --yes @google/clasp@3 pull
+      - name: Запобіжник (лише порожній скрипт або шаблон)
+        if: steps.ready.outputs.go == 'yes'
+        run: node ci/guard.js remote-before
+      - name: Залити
+        if: steps.ready.outputs.go == 'yes'
+        run: npx --yes @google/clasp@3 push --force
+      - uses: actions/upload-artifact@v4
+        if: steps.ready.outputs.go == 'yes' && always()
+        with:
+          name: remote-before
+          path: remote-before/
+          retention-days: 90
