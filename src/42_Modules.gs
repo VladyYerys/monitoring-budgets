@@ -3,7 +3,7 @@
 /*
  * Вимкнений модуль ховає свої аркуші, рядки «Головного» й повідомлення та знімає свої розклади. Дані не видаляються:
  * увімкнули знову, і все повертається. Усе вимкнено: простий журнал з «Місяцями», «Днями» й графіками.
- * «🗂 Усі аркуші» (типово «ні»): на виду лише «Старт», «Журнал», «Регулярні», «Charts» і «charts_mob» (VISIBLE_SHEETS);
+ * «🗂 Усі аркуші» (типово «ні»): на виду лише «⚡ Швидке підключення», «Журнал», «Регулярні», «Charts» і «charts_mob» (VISIBLE_SHEETS);
  * «Місяці», «Дні», «Довідник», «Налаштування», «ФОП», «Борги» і службові працюють схованими. «так» показує їх
  * («ФОП» і «Борги» лише з увімкненими модулями).
  * Перемикачі: галочки в панелі «🚀 Підключення», крок 5. Вони пишуть «так» / «ні» в блок «🧩 Модулі» на «Налаштуваннях»
@@ -63,14 +63,14 @@ function modInitial_(ss) {
 function modBlock_(ss) {
   const at = (name, head, first) => {
     const sh = ss.getSheetByName(name);
-    return sh && sh.getMaxRows() >= first + MODS.length - 1 && String(sh.getRange(head, 1).getValue()) === MOD_TITLE ? { sh: sh, first: first, old: name === START_SHEET } : null;
+    return sh && sh.getMaxRows() >= first + MODS.length - 1 && String(sh.getRange(head, 1).getValue()) === MOD_TITLE ? { sh: sh, first: first, old: name === START_OLD } : null;
   };
-  return at(SETTINGS_SHEET, MOD_HEAD, MOD_FIRST) || at(START_SHEET, MOD_OLD_HEAD, MOD_OLD_FIRST);
+  return at(SETTINGS_SHEET, MOD_HEAD, MOD_FIRST) || at(START_OLD, MOD_OLD_HEAD, MOD_OLD_FIRST);
 }
 function startHasModules_(ss) { return !!modBlock_(ss); }
 /** Старий блок ще стоїть на «Старті». */
 function modOldOnStart_(ss) {
-  const sh = ss.getSheetByName(START_SHEET);
+  const sh = ss.getSheetByName(START_OLD);
   return !!sh && sh.getMaxRows() >= MOD_OLD_HEAD && String(sh.getRange(MOD_OLD_HEAD, 1).getValue()) === MOD_TITLE;
 }
 
@@ -225,7 +225,7 @@ function modulesIfChanged_(ss) {
 
 /** Чи правка зачепила клітинки модулів («Налаштування»; у старих таблицях ще «Старт»). */
 function isModulesEdit_(range) {
-  const name = range.getSheet().getName(), first = name === SETTINGS_SHEET ? MOD_FIRST : name === START_SHEET ? MOD_OLD_FIRST : 0;
+  const name = range.getSheet().getName(), first = name === SETTINGS_SHEET ? MOD_FIRST : name === START_OLD ? MOD_OLD_FIRST : 0;
   return first > 0 && range.getColumn() <= 2 && range.getLastColumn() >= 2 && range.getLastRow() >= first && range.getRow() <= first + MODS.length - 1;
 }
 

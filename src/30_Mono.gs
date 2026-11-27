@@ -166,6 +166,85 @@ function importNow() {
   show_('🏦 Імпорт з банку', importReport_(r));
 }
 
+/* ---------- 🔎 сирі дані Mono: що банк реально віддає (нічого не пише в таблицю) ---------- */
+
+const RAW_DAYS = 31;
+const rawIban_ = x => { x = String(x || ''); return x.length > 10 ? x.slice(0, 4) + '…' + x.slice(-4) : x; };
+const rawCode_ = x => { x = String(x || ''); return x.length === 10 ? x.slice(0, 2) + '…' + x.slice(-2) : x; };   // ІПН людини: середина прихована; ЄДРПОУ (8): повністю
+const RAW_SALARY = /заробітн|зарплат|з\/п|salary/i, RAW_PARTS = /частин|погашенн|purchase in parts/i;
+
+/**
+ * Чиста функція: операції Mono → рядки вікна й перевірки припущень (де «заробітна плата»; чи є окремий рядок покупки частинами).
+ * → { rows: [{ t, amt, desc, comment, mcc, omcc, name, code, iban, hold, cat, why, flag }], sum: { … } }
+ */
+function rawRows_(items, rules, acc, timeOf, hist) {
+  const rows = items.slice().sort((a, b) => b.time - a.time).map(it => {
+    const amt = round2_(it.amount / 100), cz = categorize_(it, amt, rules, acc), h = !cz.cat || cz.cat === CAT_TRANSFER ? histGuess_(hist || {}, amt, it.description) : null;
+    const where = ['description', 'comment', 'counterName'].filter(k => RAW_SALARY.test(String(it[k] || '')));
+    const parts = RAW_PARTS.test(String(it.description || '') + ' ' + String(it.comment || ''));
+    return { t: timeOf(it), amt: amt, desc: String(it.description || ''), comment: String(it.comment || ''), mcc: Number(it.mcc || 0), omcc: Number(it.originalMcc || 0),
+      name: String(it.counterName || ''), code: rawCode_(it.counterEdrpou), iban: rawIban_(it.counterIban), hold: !!it.hold,
+      cat: cz.cat || (h && h.cat) || '', why: cz.rule ? 'правило: ' + cz.rule.text.slice(0, 30) + (cz.rule.text.length > 30 ? '…' : '') : h && h.cat ? 'історія: ' + h.text : isTransfer_(it) ? 'схоже на переказ' : cz.cat ? '' : 'немає правила',
+      salary: where, parts: parts ? (/погашенн/i.test(String(it.description || '')) ? 'погашення' : 'покупка?') : '' };
+  });
+  const cnt = f => rows.filter(f).length, sal = rows.filter(r => r.salary.length);
+  return { rows: rows, sum: {
+    n: rows.length, comment: cnt(r => r.comment), name: cnt(r => r.name), code: cnt(r => r.code), iban: cnt(r => r.iban), omcc: cnt(r => r.omcc && r.omcc !== r.mcc),
+    salary: sal.length, salaryIn: ['comment', 'description', 'counterName'].map(k => [k, sal.filter(r => r.salary.indexOf(k) >= 0).length]),
+    pay: cnt(r => r.parts === 'погашення'), buy: cnt(r => r.parts === 'покупка?'), none: cnt(r => !r.cat || r.cat === CAT_TRANSFER) } };
+}
+
+/** HTML вікна: підсумок перевірок, пошук, таблиця. */
+function rawHtml_(name, days, data) {
+  const s = data.sum, F = { comment: 'коментар (comment)', description: 'опис (description)', counterName: 'отримувач (counterName)' };
+  const head = ['Час', 'Сума', 'Опис', 'Коментар', 'MCC', 'Отримувач', 'ЄДРПОУ / ІПН', 'IBAN', 'Шаблон поставить', 'Чому'];
+  const td = x => '<td>' + esc_(x) + '</td>';
+  const rows = data.rows.map(r => '<tr' + (r.salary.length || r.parts ? ' class="hl"' : !r.cat || r.cat === CAT_TRANSFER ? ' class="no"' : '') + '>' + td(r.t + (r.hold ? ' ⏳' : '')) +
+    '<td class="n">' + esc_(money_(r.amt)) + '</td>' + td(r.desc) + td(r.comment) + td(r.mcc + (r.omcc && r.omcc !== r.mcc ? ' (було ' + r.omcc + ')' : '')) + td(r.name) + td(r.code) + td(r.iban) +
+    td(r.cat || '(порожньо)') + td(r.why + (r.parts ? ' · частинами: ' + r.parts : '') + (r.salary.length ? ' · «зарплата» в: ' + r.salary.map(k => F[k]).join(', ') : '')) + '</tr>').join('');
+  return '<div style="font:13px/1.45 Arial,sans-serif">' +
+    '<p><b>' + esc_(name) + '</b>, за ' + days + ' дн.: операцій <b>' + s.n + '</b>; з коментарем ' + s.comment + ', з отримувачем ' + s.name + ', з кодом ЄДРПОУ / ІПН ' + s.code +
+    ', з IBAN ' + s.iban + (s.omcc ? ', MCC уточнено банком ' + s.omcc : '') + '. Без категорії чи «переказ»: <b>' + s.none + '</b>.</p>' +
+    '<p>🔎 «Заробітна плата»: ' + (s.salary ? '<b>' + s.salary + '</b> опер.; знайдено в: ' + s.salaryIn.filter(x => x[1]).map(x => F[x[0]] + ' ' + x[1]).join(', ') : 'немає за ці дні') + '.<br>' +
+    '🔎 Покупки частинами: погашень <b>' + s.pay + '</b>, інших рядків «частинами» (можлива сама покупка) <b>' + s.buy + '</b>.</p>' +
+    '<p style="color:#5f6368">Нічого не записано в таблицю. IBAN і ІПН людей з прихованою серединою. Правило за отримувачем: аркуш «' + RULES_SHEET +
+    '», «Де шукати: отримувач», текст: назва чи код. Жовті: зарплата чи частинами; рожеві: без категорії.</p>' +
+    '<input id="q" placeholder="Пошук: опис, коментар, отримувач…" style="width:100%;padding:6px;margin:4px 0" oninput="f(this.value)">' +
+    '<div style="max-height:430px;overflow:auto"><table id="t" style="border-collapse:collapse;width:100%">' +
+    '<tr>' + head.map(h => '<th>' + h + '</th>').join('') + '</tr>' + rows + '</table></div></div>' +
+    '<style>th,td{border-bottom:1px solid #eee;padding:3px 6px;text-align:left;vertical-align:top}th{position:sticky;top:0;background:#f8f9fa}' +
+    'td.n{text-align:right;white-space:nowrap}tr.hl td{background:#fff8e1}tr.no td{background:#fdecea}</style>' +
+    '<script>function f(q){q=q.toLowerCase();var r=document.getElementById("t").rows;for(var i=1;i<r.length;i++)' +
+    'r[i].style.display=!q||r[i].textContent.toLowerCase().indexOf(q)>=0?"":"none"}</script>';
+}
+
+/** Меню «🔎 Сирі дані Mono»: рахунок, кількість днів → вікно. Таблицю не змінює. */
+function monoRawNow() {
+  if (!menuOk_('🔎 Сирі дані Mono')) return;
+  const ss = SpreadsheetApp.getActive(), ui = SpreadsheetApp.getUi(), token = PropertiesService.getUserProperties().getProperty('mono_token');
+  const T = '🔎 Сирі дані Mono';
+  if (!token) { show_(T, ['Mono ще не підключено: «🚀 Підключення», крок 1.']); return; }
+  const accs = monoAccs_();
+  if (!accs.length) { show_(T, ['Немає збережених рахунків Mono: «🚀 Підключення», крок 1.']); return; }
+  let s = accs[0];
+  if (accs.length > 1) {
+    const a = ui.prompt(T, 'Який рахунок? ' + accs.map((x, i) => (i + 1) + ') ' + x.name).join(', ') + '.\nВведіть номер (порожньо: 1):', ui.ButtonSet.OK_CANCEL);
+    if (a.getSelectedButton() !== ui.Button.OK) return;
+    s = accs[Math.max(1, Math.min(accs.length, Number(String(a.getResponseText()).trim()) || 1)) - 1];
+  }
+  const d = ui.prompt(T, 'За скільки днів показати (1–' + RAW_DAYS + ')? Порожньо: ' + RAW_DAYS + '.\nMono дає 1 запит на хвилину: якщо щойно був імпорт, зачекайте до хвилини.', ui.ButtonSet.OK_CANCEL);
+  if (d.getSelectedButton() !== ui.Button.OK) return;
+  const days = Math.max(1, Math.min(RAW_DAYS, Math.round(Number(String(d.getResponseText()).trim()) || RAW_DAYS)));
+  const tz = ss.getSpreadsheetTimeZone(), now = Math.floor(Date.now() / 1000), from = Math.max(now - days * 86400, now - MONO_MAX_SPAN + 60);
+  const timeOf = it => Utilities.formatDate(new Date(it.time * 1000), tz, 'dd.MM.yyyy HH:mm');
+  let items;
+  try { ss.toast('Завантажую з Mono…', T, 10); items = fetchStatement_(token, s.id, from, now); } catch (e) { show_(T, ['⚠️ ' + esc_(e.message)]); return; }
+  const acc = accList_(ss).find(x => x.key === 'mono:' + md5Short_(s.id)) || { name: s.name, kind: K_MAIN, who: '' };
+  const data = rawRows_(items, readRules_(ss), acc, timeOf, histMap_(readJournal_(ss)));
+  const html = HtmlService.createHtmlOutput(rawHtml_(s.name, days, data)).setWidth(1150).setHeight(700);
+  try { ui.showModalDialog(html, T); } catch (e) { Logger.log(JSON.stringify(data.sum)); }
+}
+
 /* ---------- за розкладом ---------- */
 
 function mbsImport() { if (quietOk_()) return runImport_(0); }
@@ -246,12 +325,13 @@ function importBank_(ss) {
 
 function emptyReport_() {
   return { drafts: 0, lost: 0, transfers: 0, uncategorized: 0, matched: 0, other: 0, updated: 0, redated: 0, changed: 0, seen: 0, fees: 0, skipped: 0, vanished: 0,
+    pairs: 0, plans: 0, learned: 0, facts: 0,
     checkpoints: [], own: null, limit: null, newOps: [], todayOps: { out: 0, inc: 0, n: 0 }, notes: [], accounts: [] };
 }
 
 function mergeReport_(rep, r) {
-  ['drafts', 'lost', 'transfers', 'uncategorized', 'matched', 'other', 'updated', 'redated', 'changed', 'seen', 'fees', 'skipped', 'vanished']
-    .forEach(k => { rep[k] += r[k] || 0; });
+  ['drafts', 'lost', 'transfers', 'uncategorized', 'matched', 'other', 'updated', 'redated', 'changed', 'seen', 'fees', 'skipped', 'vanished', 'pairs', 'plans', 'learned', 'facts']
+    .forEach(k => { rep[k] = (rep[k] || 0) + (r[k] || 0); });
   ['checkpoints', 'newOps', 'notes', 'accounts'].forEach(k => { rep[k] = rep[k].concat(r[k] || []); });
   ['out', 'inc', 'n'].forEach(k => { rep.todayOps[k] = round2_(rep.todayOps[k] + ((r.todayOps || {})[k] || 0)); });
   if (r.own !== null && r.own !== undefined) { rep.own = r.own; rep.limit = r.limit; }
@@ -261,10 +341,11 @@ function mergeReport_(rep, r) {
 /** Звіт одного рахунку з результату bankIngest_. */
 function accReport_(acc, items, res, dateOf, today) {
   const p = res.plan, r = emptyReport_();
-  Object.assign(r, { drafts: res.written, lost: res.lost, transfers: p.stats.transfers, uncategorized: p.stats.uncategorized, matched: p.marks.length,
-    other: p.stats.other, updated: p.stats.resized, redated: p.stats.redated, changed: p.stats.changed, seen: items.length, vanished: p.vanish.length, accounts: [acc.name] });
-  r.newOps = p.drafts.slice(0, res.written).map(d => ({ key: d.key, time: String(d.bank[4] || '').slice(11, 16), amt: Number(d.bank[2]) || 0, cat: d.c || '',
-    desc: String(d.bank[1] || ''), acc: acc.name }));
+  Object.assign(r, { drafts: res.written + (res.taken || 0), lost: res.lost, transfers: p.stats.transfers, uncategorized: p.stats.uncategorized, matched: p.marks.length,
+    other: p.stats.other, updated: p.stats.resized, redated: p.stats.redated, changed: p.stats.changed, seen: items.length, vanished: p.vanish.length, accounts: [acc.name],
+    pairs: p.stats.own || 0, plans: p.stats.plans || 0, learned: p.stats.learned || 0, facts: p.stats.facts || 0 });
+  const op = (d, cat) => ({ key: d.key, time: String(d.bank[4] || '').slice(11, 16), amt: Number(d.bank[2]) || 0, cat: cat || '', desc: String(d.bank[1] || ''), acc: acc.name });
+  r.newOps = p.drafts.slice(0, res.written).map(d => op(d, d.c)).concat((p.takes || []).map(t => op(t, t.c)));
   items.forEach(it => { if (dateOf(it) !== today) return; const a = Number(it.amount) / 100; r.todayOps.n++;
     if (a < 0) r.todayOps.out = round2_(r.todayOps.out - a); else r.todayOps.inc = round2_(r.todayOps.inc + a); });
   return r;
@@ -403,16 +484,21 @@ function upsertCheckpoints_(ss, cps) {
 /* ---------- звіти про імпорт ---------- */
 
 function importSummary_(r) {
-  return 'нових чернеток ' + r.drafts + (r.transfers ? ' (переказів ' + r.transfers + ')' : '') + (r.uncategorized ? ', без категорії ' + r.uncategorized : '') +
+  return 'нових операцій ' + r.drafts + (r.transfers ? ' (переказів ' + r.transfers + ')' : '') + (r.uncategorized ? ', без категорії ' + r.uncategorized : '') +
+    (r.facts ? ' · одразу «✅ факт» ' + r.facts : '') + (r.plans ? ' · закрито планів ' + r.plans : '') + (r.pairs ? ' · між своїми ' + r.pairs : '') + (r.learned ? ' · за історією ' + r.learned : '') +
     ' · ваших рядків знайдено ' + r.matched + (r.other ? ' · з іншого джерела ' + r.other : '') + (r.lost ? ' · ⚠️ не вмістилось ' + r.lost : '') +
     (r.changed ? ' · ⚠️ розбіжностей сум ' + r.changed : '') + ((r.errors || []).length ? ' · ⚠️ ' + r.errors.join('; ') : '');
 }
 
 function importReport_(r) {
   const lines = ['Рахунки: ' + esc_(r.accounts.filter((a, i, x) => x.indexOf(a) === i).join(', ') || 'немає') + '. Операцій у виписках: ' + r.seen + '.',
-    '<b>Нових чернеток: ' + r.drafts + '</b>' + (r.transfers ? ': з них переказів (червоні): <b>' + r.transfers + '</b>' : '') +
+    '<b>Нових операцій: ' + r.drafts + '</b>' + (r.transfers ? ': з них переказів (червоні): <b>' + r.transfers + '</b>' : '') +
       (r.uncategorized ? ', без категорії: <b>' + r.uncategorized + '</b>' : '') + '.',
     'Ваших рядків знайдено у виписці (без дубля): <b>' + r.matched + '</b>.' + (r.other ? ' Уже були з іншого джерела: <b>' + r.other + '</b>.' : '')];
+  if (r.facts) lines.push('Одразу «✅ факт» (категорію визначено): <b>' + r.facts + '</b>. Вимкнути: «' + SETTINGS_SHEET + '», B35.');
+  if (r.plans) lines.push('Закрито планів («Регулярні», «Борги»): <b>' + r.plans + '</b>: рядок плану став операцією з банку.');
+  if (r.pairs) lines.push('Між своїми рахунками (пара сум на двох рахунках): <b>' + r.pairs + '</b>.');
+  if (r.learned) lines.push('Категорія за історією (≥ 3 рази й ≥ 80 % однаково): <b>' + r.learned + '</b>.');
   r.notes.forEach(n => lines.push('ℹ️ ' + esc_(n) + '.'));
   (r.errors || []).forEach(n => lines.push('⚠️ ' + esc_(n)));
   if (r.fees) lines.push('Комісій окремими рядками «' + CAT_FEE + '»: ' + r.fees + '.');
@@ -448,6 +534,8 @@ function importText_(ss, r, meta) {
   if (bud.length) lines.push(bud.map(x => x.text).join('\n'));
   const drafts = rows.filter(o => o.e === STATUS_DRAFT).length;
   if (drafts) lines.push('🏦 Чернетки чекають «✅ факт»: <b>' + drafts + '</b>');
+  if (r.facts) lines.push('✅ Одразу факт: ' + r.facts);
+  if (r.plans) lines.push('✓ Закрито планів: ' + r.plans);
   if (r.transfers) lines.push('↔ Нових переказів: ' + r.transfers + ': оберіть категорію.');
   (r.errors || []).forEach(e => lines.push('⚠️ ' + esc_(e)));
   if (r.lost) lines.push('⚠️ Не вмістилось у журнал: ' + r.lost + '.');

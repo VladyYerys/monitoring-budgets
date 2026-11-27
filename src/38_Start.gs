@@ -1,74 +1,144 @@
-/** 38_Start.gs: аркуш «Старт»: кроки з номерами кроків панелі «🚀 Підключення», демо-місяць. Підключення: 44_Connect.gs. */
+/** 38_Start.gs: аркуш «⚡ Швидке підключення»: стан таблиці й покрокова інструкція для ШІ (Gemini чи іншого); демо-місяць. */
 
 /*
- * У копії шаблону розклади й дозволи не переносяться, тож усе починається з меню «📊 Monitoring Budgets → 🚀 Підключення»:
- * скрипт добудовує, чого бракує, і відкриває бічну панель з п'ятьма кроками (44_Connect.gs).
- * «Старт» оновлює скрипт (раз на день, після «Готово», галочок модулів і з меню). Рядок: «✅ 1» зроблено, «⬜ 2» ще ні;
- * число: крок у панелі, «·»: поза панеллю. Непотрібне (вимкнений модуль, «я сам» без сім'ї) не показується.
- * Модулі: «🚀 Підключення», крок 5 (до версії 12 блок «🧩 Модулі» стояв тут, рядки 24…).
+ * Перша вкладка. Людина відкриває ШІ з доступом до таблиці (Gemini справа вгорі в Таблицях) і пише:
+ * «Прочитай аркуш «⚡ Швидке підключення» і налаштуй зі мною таблицю». Далі ШІ веде сам за цим аркушем:
+ *   1. СТАН: що вже підключено (пише скрипт: раз на день, після «Готово» в панелі, галочок модулів і з меню);
+ *   2. ЯК ВЕСТИ ЛЮДИНУ: що за чим; банк, Telegram, модулі й радника робить людина в панелі «🚀 Підключення»
+ *      (меню, дозволи Google, токени: ШІ цього не може і не повинен);
+ *   3. КАРТА: завдання → аркуш → колонки → приклад (регулярні, бюджети, борги, «Мої правила», правила, журнал);
+ *   4. ЯК ВІДПОВІДАТИ про гроші: загальне з шапки «Журналу» й «Головного», конкретні витрати з «Журналу»;
+ *   5. НЕ МОЖНА: формули, службові аркуші, токени, сортування, «✅ факт» без прохання;
+ *   6. ГОТОВІ ЗАПИТИ для людини.
+ * У «Журнал» ШІ пише лише на пряме прохання людини, у рядок для вводу, колонки A–E (G для сім'ї).
+ * До версії 15 аркуш звався «Старт» (кроки з галочками).
  * Демо-місяць: вигадані операції з позначкою «[демо]» у коментарі, щоб одразу побачити «Charts» і «charts_mob»; «🧹 Очистити демо» прибирає все.
  */
 
-const START_FIRST = 6, START_ROWS = 30;                                  // кроки з рядка 6; місце під кроки й низ: 30 рядків
+const START_OLD = 'Старт';                                               // назва аркуша до версії 15
+const QUICK_TITLE = '⚡ Швидке підключення';
+const START_FIRST = 7, START_ROWS = 110;                                 // стан з рядка 7; усе разом: до 110 рядків
 const DEMO_TAG = '[демо] ';
-const P_STEP = 'крок ';                                                 // «Де»: крок панелі «🚀 Підключення»
+const P_STEP = 'крок ';
 
 function buildStart_(ss) {
-  const sh = ensureSize_(sheetOf_(ss, START_SHEET), START_FIRST + START_ROWS, 4);
-  sh.getRange(1, 1).setValue('🚀 Старт').setFontWeight('bold').setFontSize(14);
+  const sh = ensureSize_(sheetOf_(ss, START_SHEET), START_ROWS + 5, 3);
   if (!startHasModules_(ss) && ss.getSheetByName(SETTINGS_SHEET)) modBlockBuild_(ss);
   startRefresh_(ss);
   return sh;
 }
 
-/** Кроки: { ok: true (✅) / false (⬜) / null (не потрібно: не показується), n: крок панелі (0: поза панеллю), what, where }. */
-function startSteps_(ss) {
-  const dp = PropertiesService.getDocumentProperties(), accs = accList_(ss), fam = familyMode_(ss);
-  const has = fn => hasTrigger_(fn), rows = ss.getSheetByName(JOURNAL) ? readJournal_(ss).filter(o => !o.blank) : [];
+/** Стан для ШІ: [що, стан, хто й де]. done/need: скільки з основного вже готово. */
+function quickState_(ss) {
+  const dp = PropertiesService.getDocumentProperties(), up = PropertiesService.getUserProperties(), accs = accList_(ss), fam = familyMode_(ss);
+  const rows = ss.getSheetByName(JOURNAL) ? readJournal_(ss).filter(o => !o.blank) : [];
   const cp = ss.getSheetByName(CP_SHEET) ? ss.getSheetByName(CP_SHEET).getRange(CP_FIRST, 1, 30, 2).getValues().some(r => r[0] && r[1] !== '') : false;
-  const cs = checkState_(ss), up = PropertiesService.getUserProperties(), fops = fopList_(ss), mono = !!up.getProperty('mono_token');
-  const hid = modOn_('service') ? '' : ' (видно з модулем «' + modName_('service') + '», крок 5)';
-  const P = P_STEP;
-  return [
-    { n: 0, ok: fam ? members_(ss).length >= 2 : null, what: 'Учасники сім\'ї (до 5)', where: 'угорі панелі: «Сім\'я»' },
-    { n: 1, ok: accs.length > 0, what: 'Картка й банк: Mono, ПриватБанк для ФОП або виписка', where: P + '1' },
-    { n: 1, ok: mono || up.getProperty('pb_token') ? has(TRG.imp) : null, what: 'Імпорт з банку щодня', where: P + '1: «Імпорт з банку щодня»' },
-    { n: 1, ok: cp, what: 'Залишок на картці (контрольна точка)', where: mono ? 'сам з Mono' : 'аркуш «' + CP_SHEET + '»' + hid },
-    { n: 1, ok: modOn_('fop') ? fops.length > 0 : null, what: 'ФОП: група й ставки', where: P + '1: «Рахунок ФОП»' },
-    { n: 2, ok: modOn_('tg') ? tgConnected_() : null, what: 'Telegram-бот: ранковий підсумок і звіти', where: P + '2' },
-    { n: 3, ok: ss.getSheetByName(REG_SHEET) ? regOwn_(ss).length > 0 : null, what: 'Регулярні платежі й доходи (оренда, підписки, зарплата)', where: P + '3 або аркуш «' + REG_SHEET + '»' },
-    { n: 4, ok: modOn_('advisor') ? !!dp.getProperty('adv_doc_id') : null, what: 'Радник Gemini: знімок і навичка', where: P + '4' },
-    { n: 5, ok: !!dp.getProperty('mods_seen') || !!dp.getProperty('wiz_done'), what: 'Модулі: що увімкнути', where: P + '5 (меню «🧩 Модулі»)' },
-    { n: 0, ok: rows.length > 0, what: 'Перші записи в журналі', where: 'аркуш «' + JOURNAL + '» або «Демо-місяць» у панелі' },
-    { n: 0, ok: modOn_('cal') ? !!dp.getProperty('cal_stat') : null, what: 'Календар платежів', where: 'оновлюється сам' },
-    { n: 0, ok: modOn_('debts') ? debtsList_(ss).length > 0 : null, what: 'Борги й розстрочки', where: 'аркуш «' + DEBTS_SHEET + '»' + hid },
-    { n: 0, ok: cs.none ? null : cs.bad.length === 0, what: '«' + CHECK_SHEET + '»: усе OK',
-      where: cs.none || !cs.bad.length ? 'перевіряється сам' : 'аркуш «' + CHECK_SHEET + '»: ' + cs.bad.length + ' ⚠️' + hid },
-  ].filter(x => x.ok !== null);
+  const cs = checkState_(ss), mono = !!up.getProperty('mono_token'), bank = mono || !!up.getProperty('pb_token') || accs.length > 0;
+  const imp = bank ? hasTrigger_(TRG.imp) : false, tg = modOn_('tg') ? tgConnected_() : null;
+  const regs = ss.getSheetByName(REG_SHEET) ? regOwn_(ss).length : 0, d = ss.getSheetByName(DICT_SHEET);
+  const budgets = d ? d.getRange(D_FIRST, 6, D_LAST - D_FIRST + 1, 1).getValues().filter(r => Number(r[0]) > 0).length : 0;
+  const drafts = rows.filter(o => o.e === STATUS_DRAFT), red = drafts.filter(o => o.c === CAT_TRANSFER || !o.c).length;
+  const off = 'модуль вимкнено (людина: ' + P_STEP + '5)', H = 'людина: «🚀 Підключення», ', AI = 'ШІ: ';
+  const adv = modOn_('advisor') ? (dp.getProperty('adv_doc_id') ? 'знімок є' : 'знімка ще немає') : off;
+  const list = [
+    ['Режим', fam ? 'сім\'я: ' + members_(ss).join(', ') : 'я сам', 'людина: угорі панелі «🚀 Підключення»'],
+    ['Банк', accs.length ? accs.map(a => a.name).join(', ') : 'не підключено', H + P_STEP + '1'],
+    ['Імпорт з банку щодня', !bank ? 'після банку' : imp ? 'так' : 'ні', H + P_STEP + '1'],
+    ['Залишок на картці (контрольна точка)', cp ? 'є' : 'немає', mono ? 'сам з Mono' : 'людина: аркуш «' + CP_SHEET + '»'],
+    ['Telegram-бот', tg === null ? off : tg ? 'підключено' : 'не підключено', H + P_STEP + '2'],
+    ['Регулярні платежі й доходи', 'своїх: ' + regs, AI + 'аркуш «' + REG_SHEET + '» (див. КАРТУ)'],
+    ['Бюджети категорій на місяць', modOn_('budgets') ? 'з планом: ' + budgets : off, AI + '«' + DICT_SHEET + '», колонка F'],
+    ['Борги й розстрочки', modOn_('debts') ? 'рядків: ' + debtsList_(ss).length : off, AI + 'аркуш «' + DEBTS_SHEET + '»'],
+    ['ФОП', modOn_('fop') ? (fopList_(ss).length ? 'ФОП: ' + fopList_(ss).length : 'не вказано') : off, H + P_STEP + '1 («Рахунок ФОП»)'],
+    ['Мої правила для радника', advRules_(ss).filled ? 'заповнено' : 'не заповнено', AI + '«' + SETTINGS_SHEET + '», B27–B32'],
+    ['Радник Gemini', adv, H + P_STEP + '4'],
+    ['Модулі увімкнено', MODS.filter(m => modOn_(m.id)).map(m => m.name).join(', ') || 'жодного', H + P_STEP + '5 (меню «🧩 Модулі»)'],
+    ['Операції в журналі', 'фактів: ' + rows.filter(o => o.e === STATUS_FACT).length + '; чернеток: ' + drafts.length + (red ? ', з них без категорії: ' + red : ''), 'аркуш «' + JOURNAL + '»'],
+    ['«' + CHECK_SHEET + '»', cs.none ? 'ще не рахувалась' : cs.bad.length ? cs.bad.length + ' ⚠️' : 'усе OK', 'перевіряється сам'],
+    ['Оновлено', Utilities.formatDate(new Date(), ss.getSpreadsheetTimeZone(), 'dd.MM.yyyy HH:mm'), 'меню «⚡ Оновити «Швидке підключення»»'],
+  ];
+  const need = [accs.length > 0, !bank || imp, tg !== false, regs > 0, !modOn_('advisor') || !!dp.getProperty('adv_doc_id'), !!dp.getProperty('mods_seen') || !!dp.getProperty('wiz_done')];
+  return { rows: list, done: need.filter(Boolean).length, need: need.length };
 }
 
-/** Оновити «Старт»: кроки, смужка «готово», низ з «Підтримати». */
+/** Інструкція для ШІ (не залежить від стану): розділи 2–6. [A, B, C]; рядок з одним A і '#': заголовок розділу. */
+function quickGuide_() {
+  const J = '«' + JOURNAL + '»', R = '«' + REG_SHEET + '»', D = '«' + DICT_SHEET + '»', S = '«' + SETTINGS_SHEET + '»';
+  return [
+    ['# 2. ДЛЯ ШІ: ЯК ВЕСТИ ЛЮДИНУ (по черзі, по одному питанню)'],
+    ['1', 'Прочитай розділ 1 «СТАН». Скажи коротко, що вже готово і що далі.', ''],
+    ['2', 'Банк, Telegram, модулі й радника робить людина в панелі: меню «📊 ' + APP_NAME + ' → 🚀 Підключення» на комп\'ютері (на телефоні меню скриптів немає). ' +
+      'Токени, номери карток, IBAN не проси й не приймай: їх вставляють лише в панель.', 'людина'],
+    ['3', 'Регулярні: розпитай про оренду, комуналку, інтернет, підписки, зарплату, кредити й розстрочки. Кожен платіж чи дохід: рядок у ' + R + ' (див. КАРТУ). ' +
+      'Рядки «💡 Приклад» з «ні» можна поправити й поставити «так».', 'ШІ'],
+    ['4', 'Бюджети: запропонуй план на місяць для 5–7 головних категорій витрат. Якщо є «Місяці» за 2–3 місяці, спирайся на них. Пиши в ' + D + ', колонка F.', 'ШІ'],
+    ['5', 'Борги й розстрочки (якщо модуль увімкнено): рядок на кожен у «' + DEBTS_SHEET + '».', 'ШІ'],
+    ['6', '«Мої правила» для радника: пріоритет, подушка, запас, розстрочки, ФОП, свої правила: ' + S + ', B27–B32.', 'ШІ'],
+    ['7', 'Наприкінці: дивитись на «' + DASH_SHEET + '» (комп\'ютер) і «' + MOB_SHEET + '» (телефон); операції з банку приходять самі; питати можна тебе.', 'ШІ'],
+    ['# 3. КАРТА: ЩО ДЕ ЗАПИСУВАТИ', 'Аркуш і колонки', 'Приклад'],
+    ['Регулярний платіж чи дохід', R + ', перший порожній рядок з 5-го: A назва, B категорія (лише з аркуша ' + D + ', колонка A), C сума, D день 1–31, ' +
+      'E як часто (' + REG_PER.join(' / ') + '), F перший платіж (дата, для щокварталу й щороку), G до (порожньо: без кінця), H хто (сім\'я), I «так»',
+      'Оренда · Оренда житла · 15000 · 5 · щомісяця · · · · так'],
+    ['План категорії на місяць', D + ': рядок категорії (колонка A), колонка F: сума ₴', 'Продукти → F: 9000'],
+    ['Борг чи розстрочка', '«' + DEBTS_SHEET + '», з рядка 5: A назва, B напрям (' + DEBT_OWE + ' / ' + DEBT_LENT + '), C сума боргу, D платіж на місяць, E день 1–28, ' +
+      'F перший платіж, G хто, H категорія (можна порожньо)', 'Розстрочка за телефон · я винен · 12000 · 1000 · 15'],
+    ['Мої правила для радника', S + ': B27 пріоритет (зі списку), B28 подушка % (0,1 = 10 %), B29 запас ₴, B30 розстрочки обов\'язкові (так / ні), ' +
+      'B31 ФОП % , B32 свої правила (до ' + ADV_RULES_MAX + ' знаків)', 'B29: 3000'],
+    ['Правило категорії для банку', '«' + RULES_SHEET + '», вільний рядок: A «так», B слова через кому, C де шукати (' + RULE_WHERE.join(' / ') + '), ' +
+      'D напрям (' + RULE_DIR.join(' / ') + '), E категорія з аркуша ' + D, 'так · затак · опис банку · списання · Продукти'],
+    ['Витрата чи дохід вручну (ЛИШЕ на пряме прохання людини)', J + ': рядок з шапки «✍️ Писати у рядок № …» (порожній). A дата, B сума (завжди додатна), ' +
+      'C категорія з аркуша ' + D + ', D коментар, E «' + STATUS_FACT + '» (чи «' + STATUS_PLAN + '» для майбутнього), G хто (сім\'я). Колонки з I і далі не чіпати.',
+      '27.11.2026 · 85 · Кава та перекуси · кава · ' + STATUS_FACT],
+    ['# 4. ЯК ВІДПОВІДАТИ НА ПИТАННЯ ПРО ГРОШІ'],
+    ['Загальне (скільки є, скільки можна, як справи)', 'шапка аркуша ' + J + ' (рядки 1–3: «Мої зараз», «На картці», бюджети) і «' + MAIN_SHEET + '» (схований аркуш: підпис у A, число в B: ' +
+      '«Доступно моїх сьогодні», «Можна на день», «Прогноз на кінець місяця (за планом)»…). Готові цифри не перераховуй.', ''],
+    ['Конкретні витрати (за категорією, місяць, магазин)', J + ' з рядка 5: A дата, B сума, C категорія, D коментар, E статус, I тип. Рахуй «' + STATUS_FACT + '»; ' +
+      'чернетки «' + STATUS_DRAFT + '» і плани показуй окремо. Підсумки місяців: «' + MONTHS_SHEET + '».', ''],
+    ['# 5. НЕ МОЖНА'],
+    ['Формули', 'Не змінюй формули й колонки аркуша ' + J + ' з I і далі; аркуші «' + DAYS_SHEET + '», «' + MAIN_SHEET + '», «' + CH_SHEET + '», «' + DASH_SHEET + '», «' + MOB_SHEET + '», «' + CHECK_SHEET +
+      '», «' + BANK_SHEET + '», «' + ACC_SHEET + '» пише лише скрипт.', ''],
+    ['Журнал', 'Не видаляй і не сортуй рядки (порядок веде скрипт); не став «' + STATUS_FACT + '» чернеткам і не змінюй чужі рядки без прохання людини.', ''],
+    ['Категорії', 'Лише з аркуша ' + D + ' (колонка A). Нова категорія: спершу рядок на аркуші ' + D + ' (A назва, B тип, C група).', ''],
+    ['Секрети', 'Токени банку й бота, номери карток, IBAN, паролі, коди з SMS: не проси й не вписуй нікуди.', ''],
+    ['# 6. ГОТОВІ ЗАПИТИ (для людини)'],
+    ['«Прочитай аркуш «' + QUICK_TITLE + '» і налаштуй зі мною таблицю»', '', ''],
+    ['«Додай мої підписки: Netflix 350 ₴ 12-го, YouTube 150 ₴ 3-го»', '', ''],
+    ['«Постав бюджети на місяць за моїми витратами за 3 місяці»', '', ''],
+    ['«Скільки я витратив на кафе цього місяця?»', '', ''],
+    ['«Запиши витрату готівкою: кава 85 ₴ сьогодні»', '', ''],
+    ['«Що ще не налаштовано?»', '', ''],
+  ];
+}
+
+/** Оновити «⚡ Швидке підключення»: стан і інструкція. → { done, need } */
 function startRefresh_(ss) {
   const sh = ss.getSheetByName(START_SHEET);
   if (!sh) return null;
-  const steps = startSteps_(ss), done = steps.filter(x => x.ok).length, need = steps.length;
-  ensureSize_(sh, START_FIRST + START_ROWS, 4);
-  const lim = modOldOnStart_(ss) ? MOD_OLD_HEAD - START_FIRST : START_ROWS;    // старий блок модулів (до версії 12) не чіпаємо
-  sh.getRange(START_FIRST, 1, lim, 3).clearContent();
-  sh.getRange(START_FIRST, 1, lim, 3).setFontWeight('normal').setFontColor('#000000');
-  sh.getRange(2, 1).setValue('Меню «📊 ' + APP_NAME + ' → 🚀 Підключення» на комп\'ютері (на телефоні меню скриптів немає). ' +
-    'Число: крок у панелі. Галочки ставляться самі.').setWrap(false);
-  sh.getRange(3, 1).setValue('▰'.repeat(done) + '▱'.repeat(need - done) + '  ' + done + ' з ' + need + (done === need ? ' ✅' : '')).setFontWeight('bold');
-  sh.getRange(START_FIRST - 1, 1, 1, 3).setValues([['', 'Крок', 'Де']]).setFontWeight('bold');
-  sh.getRange(START_FIRST, 1, steps.length, 3).setValues(steps.map(x => [(x.ok ? '✅ ' : '⬜ ') + (x.n || '·'), x.what, x.where.indexOf(P_STEP) === 0 ? '«🚀 Підключення», ' + x.where : x.where]));
-  const foot = START_FIRST + steps.length + 1;
-  if (foot + 1 <= START_FIRST + lim - 1) {
-    setF_(sh.getRange(foot, 1), [['=HYPERLINK("' + SUPPORT_URL + '","❤️ Підтримати автора")']]);
-    sh.getRange(foot, 2).setValue('Шаблон безкоштовний, код відкритий: github.com/VladyYerys/monitoring-budgets');
-    sh.getRange(foot, 2).setFontColor('#5f6368');
+  const st = quickState_(ss), guide = quickGuide_(), tz = ss.getSpreadsheetTimeZone();
+  ensureSize_(sh, START_ROWS + 5, 3);
+  const lim = modOldOnStart_(ss) ? MOD_OLD_HEAD - 1 : START_ROWS;         // старий блок модулів (до версії 12) не чіпаємо
+  const all = sh.getRange(1, 1, lim, 3);
+  all.clearContent();
+  all.setFontWeight('normal').setFontColor('#000000').setFontSize(10).setWrap(true).setBackground(null);
+  sh.getRange(1, 1).setValue(QUICK_TITLE).setFontWeight('bold').setFontSize(14);
+  sh.getRange(2, 1).setValue('З ШІ: відкрийте Gemini в цій таблиці (зірочка справа вгорі) чи інший ШІ з доступом до неї й напишіть: «Прочитай аркуш «' + QUICK_TITLE +
+    '» і налаштуй зі мною таблицю». Без ШІ: меню «📊 ' + APP_NAME + ' → 🚀 Підключення» на комп\'ютері.').setWrap(false);
+  sh.getRange(3, 1).setValue('Токени банку й бота, номери карток і IBAN: лише в панелі «🚀 Підключення», ніколи в чат ШІ чи в клітинки.').setFontColor('#5f6368').setWrap(false);
+  sh.getRange(5, 1).setValue('# 1. СТАН (оновлює скрипт; ШІ читає звідси). Готово основного: ' + st.done + ' з ' + st.need).setFontWeight('bold').setWrap(false);
+  sh.getRange(6, 1, 1, 3).setValues([['Що', 'Стан', 'Хто й де']]).setFontWeight('bold');
+  sh.getRange(START_FIRST, 1, st.rows.length, 3).setValues(st.rows);
+  let r = START_FIRST + st.rows.length + 1;
+  const g = guide.map(x => [x[0], x[1] || '', x[2] || '']);
+  if (r + g.length + 2 <= lim) {
+    sh.getRange(r, 1, g.length, 3).setValues(g);
+    g.forEach((x, i) => { if (String(x[0]).indexOf('# ') === 0) sh.getRange(r + i, 1, 1, 3).setFontWeight('bold').setBackground('#f1f3f4'); });
+    r += g.length + 1;
+    setF_(sh.getRange(r, 1), [['=HYPERLINK("' + SUPPORT_URL + '","❤️ Підтримати автора")']]);
+    sh.getRange(r, 2).setValue('Шаблон безкоштовний, код відкритий: github.com/VladyYerys/monitoring-budgets').setFontColor('#5f6368');
   }
+  try { sh.setColumnWidth(1, 300); sh.setColumnWidth(2, 520); sh.setColumnWidth(3, 300); } catch (e) { /* ignore */ }
   PropertiesService.getDocumentProperties().setProperty('start_day', todayKey_(ss));
-  return { done: done, need: need };
+  return { done: st.done, need: st.need, tz: tz };
 }
 
 /** З mbsTick: раз на день. */
@@ -175,7 +245,7 @@ function demoClear() {
 }
 
 function startNow() {
-  if (!menuOk_('🚀 Старт')) return;
+  if (!menuOk_(QUICK_TITLE)) return;
   const r = startRefresh_(SpreadsheetApp.getActive());
-  show_('🚀 Старт', [r ? 'Чекліст оновлено: ' + r.done + ' з ' + r.need + '.' : 'Аркуша «' + START_SHEET + '» немає: «🛠 Оновлення таблиці → ⬆️ Оновити зараз».']);
+  show_(QUICK_TITLE, [r ? 'Оновлено. Готово основного: ' + r.done + ' з ' + r.need + '.' : 'Аркуша «' + START_SHEET + '» немає: «🛠 Оновлення таблиці → ⬆️ Оновити зараз».']);
 }

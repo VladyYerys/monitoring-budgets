@@ -53,7 +53,9 @@ t('import: drafts with rule categories, fee as its own row, transfer red, your o
   assert.strictEqual(r.transfers, 1); assert.strictEqual(r.uncategorized, 1); assert.strictEqual(r.fees, 1);
   const rows = c.readJournal_(env.ss).filter(o => !o.blank);
   const by = id => rows.find(o => o.bank[0] === id);
-  assert.strictEqual(by('m1').c, 'Продукти'); assert.strictEqual(by('m1').e, '🏦 чернетка'); assert.strictEqual(by('m1').b, 120);
+  assert.strictEqual(by('m1').c, 'Продукти'); assert.strictEqual(by('m1').e, '✅ факт', 'категорію визначено: одразу факт');
+  assert.strictEqual(by('m3').e, '🏦 чернетка'); assert.strictEqual(by('m4').e, '🏦 чернетка'); assert.strictEqual(by('m3#fee').e, '✅ факт');
+  assert.strictEqual(r.facts, 2, 'АТБ і комісія'); assert.strictEqual(by('m1').b, 120);
   assert.strictEqual(by('m2').d, 'обід', 'ваш рядок лишився, отримав номер операції');
   assert.strictEqual(by('m3').c, '↔ Переказ (уточніть)');
   assert.strictEqual(by('m3#fee').c, 'Комісії й відсотки банку'); assert.strictEqual(by('m3#fee').f, '🏦 Банківські комісії');
@@ -63,7 +65,7 @@ t('import: drafts with rule categories, fee as its own row, transfer red, your o
   assert.strictEqual(cp.filter(x => x[0]).length, 3);
   assert.strictEqual(cp[2][2], 50000, 'ліміт');
   const log = env.ss.getSheetByName('Банк');
-  assert.ok(log.getLastRow() >= 9 && /нових чернеток 4/.test(log.getRange('D2').getValue()));
+  assert.ok(log.getLastRow() >= 9 && /нових операцій 4/.test(log.getRange('D2').getValue()) && /одразу «✅ факт» 2/.test(log.getRange('D2').getValue()));
   assert.strictEqual(log.getRange('F2').getValue(), 'Mono Чорна *4321');
   // другий імпорт: нічого нового, без дублів
   const r2 = c.importBank_(env.ss);

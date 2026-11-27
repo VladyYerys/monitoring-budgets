@@ -167,7 +167,9 @@ function importStatements() {
       if (!p.header) { lines.push('⚠️ ' + esc_(x.f.getName()) + ': не знайшов заголовка з датою й сумою.'); done[x.f.getId()] = x.stamp; return; }
       const res = bankIngest_(ss, { acc: acc, items: p.items, dateOf: dateOf, timeOf: timeOf, src: 'csv' });
       total += res.written;
-      lines.push('✓ ' + esc_(x.f.getName()) + ': операцій ' + p.items.length + ', нових чернеток ' + res.written + ', ваших рядків знайдено ' + res.plan.marks.length +
+      lines.push('✓ ' + esc_(x.f.getName()) + ': операцій ' + p.items.length + ', нових ' + res.written + (res.plan.stats.facts ? ' (одразу «✅ факт»: ' + res.plan.stats.facts + ')' : '') +
+        (res.taken ? ', закрито планів ' + res.taken : '') +
+        ', ваших рядків знайдено ' + res.plan.marks.length +
         (res.plan.stats.other ? ', уже були з банку ' + res.plan.stats.other : '') + (p.skipped ? ', пропущено рядків без дати чи суми ' + p.skipped : '') + '.');
       done[x.f.getId()] = x.stamp;
     });
@@ -176,5 +178,5 @@ function importStatements() {
     dp.setProperty('stmt_done', JSON.stringify(done));
     sortCore_(ss);
   } finally { lock.releaseLock(); }
-  show_('📥 Виписки → «' + acc.name + '»', lines.concat(['Разом нових чернеток: <b>' + total + '</b>. Підтвердіть їх у журналі («✅ факт»).']));
+  show_('📥 Виписки → «' + acc.name + '»', lines.concat(['Разом нових операцій: <b>' + total + '</b>. «🏦 Чернетки» (червоні перекази, без категорії) підтвердіть у журналі («✅ факт»).']));
 }

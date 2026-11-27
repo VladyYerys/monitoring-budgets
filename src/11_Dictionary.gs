@@ -109,6 +109,7 @@ function buildSettings_(ss) {
   settingsFamily_(sh);
   settingsExtra_(sh);
   settingsRules_(sh);
+  settingsAutoFact_(sh);
   const r = Number(SET_MARK_CELL.slice(1));
   sh.getRange(SET_MARK_CELL).setValue(TEMPLATE_MARK).setFontColor('#ffffff');   // мітка шаблону (див. 01_Guard.gs)
   sh.hideRows(r, 1);
@@ -166,6 +167,26 @@ function settingsRules_(sh) {
   sh.getRange(SET.rules).setWrap(true);
   sh.getRange(33, 1).setValue('Ці рядки щодня потрапляють у знімок для Gemini (розділ «Мої правила»). Без номерів карток, IBAN, паролів і токенів: довгі числа в знімку стають «…». ' +
     'Заповнити зручніше в «🚀 Підключення», крок 4.').setFontColor('#5f6368');
+}
+
+const AUTO_FACT_LABEL = 'Операції з банку з визначеною категорією: одразу «✅ факт» (так / ні)';
+/** Рядок 35: банк визначив категорію (правило, між своїми, план, історія) → одразу «✅ факт»; «в обробці» лишаються чернетками. */
+function settingsAutoFact_(sh) {
+  sh.getRange(35, 1, 1, 3).setValues([[AUTO_FACT_LABEL, 'так', '«ні»: усе з банку приходить «🏦 чернеткою», як раніше. Червоні перекази, порожня категорія й «⏳ в обробці»: завжди чернетки.']]);
+  sh.getRange(SET.autoFact).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(['так', 'ні']).setAllowInvalid(false).build());
+  sh.getRange(35, 3).setFontColor('#5f6368');
+}
+/** Оновлення наявних «Налаштувань» (версія 14): рядок «одразу «✅ факт»», якщо його ще немає. */
+function settingsAutoFactUpgrade_(ss) {
+  const sh = ss.getSheetByName(SETTINGS_SHEET);
+  if (!sh || String(sh.getRange('A35').getValue()) === AUTO_FACT_LABEL) return [];
+  settingsAutoFact_(sh);
+  return ['«' + SETTINGS_SHEET + '», B35: операції з банку з визначеною категорією одразу «✅ факт»'];
+}
+/** Одразу «✅ факт»? Типово так (і коли рядка ще немає). */
+function autoFact_(ss) {
+  const sh = ss.getSheetByName(SETTINGS_SHEET);
+  return !sh || String(sh.getRange(SET.autoFact).getValue()).trim() !== 'ні';
 }
 
 /** Оновлення наявних «Налаштувань» (версія 11): блок «Мої правила», якщо його ще немає. */

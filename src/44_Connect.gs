@@ -368,7 +368,7 @@ function cnModsApply() {
 
 /* ---------- кінець і демо ---------- */
 
-/** «Готово»: позначка, модулі, чекліст «Старту». */
+/** «Готово»: позначка, модулі, стан на «⚡ Швидкому підключенні». */
 function cnFinish() {
   const ss = cnSs_(), dp = PropertiesService.getDocumentProperties();
   dp.setProperty('wiz_done', new Date().toISOString());

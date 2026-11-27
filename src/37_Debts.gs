@@ -78,7 +78,7 @@ function debtWanted_(debts, rows, today, horizon) {
       const last = Number(lastDayOf_(ym).slice(8)), date = ym + '-' + pad2_(Math.min(d.day, last));
       if (date > horizon) break;
       const key = DEBT_TAG + d.name + ': ' + ym.slice(5) + '.' + ym.slice(0, 4);
-      if (rows.some(o => o.d === key && Number(o.m) === 0 && !isPlan_(o.e) && o.e !== STATUS_DRAFT)) continue;   // цей місяць уже сплачено
+      if (rows.some(o => (o.d === key || o.d.indexOf(key + ' · ') === 0) && !isPlan_(o.e) && (Number(o.m) === 0 || o.e === STATUS_DRAFT))) continue;   // сплачено (чи банк закрив план: чернетка)
       if (date < today || (d.from && date < d.from)) continue;
       const amount = round2_(Math.min(d.monthly, left));
       left = round2_(left - amount);

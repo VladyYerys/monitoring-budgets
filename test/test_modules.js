@@ -33,10 +33,10 @@ t('new table: block «🧩 Модулі» on «Налаштування» (rows 
   assert.strictEqual(mods.tg, true); assert.strictEqual(mods.fop, false); assert.strictEqual(mods.debts, false);
   assert.strictEqual(env.ss.getSheetByName('ФОП').isSheetHidden(), true);
   assert.strictEqual(env.ss.getSheetByName('Борги').isSheetHidden(), true);
-  const start = env.ss.getSheetByName('Старт');
-  assert.ok(start.getRange('A1:C40').getValues().every(r => r.join('').indexOf('🧩 Модулі') < 0 || /крок 5/.test(r.join(''))), 'на «Старті» блоку модулів немає');
+  const start = env.ss.getSheetByName('⚡ Швидке підключення');
+  assert.ok(start.getRange('A1:C110').getValues().every(r => String(r[1]) !== 'Увімкнено'), 'на «⚡ Швидке підключення» блоку модулів немає');
   const p = start.prots.find(x => /Monitoring Budgets/.test(x.getDescription()));
-  assert.ok(p && p.unprot.length === 0, '«Старт» пише лише скрипт: вільних клітинок немає');
+  assert.ok(p && p.unprot.length === 0, '«⚡ Швидке підключення» пише лише скрипт: вільних клітинок немає');
   assert.ok(mainRow(env, 'Грейс: внести до строку') > 0 && mainRow(env, 'Борги: я винен (залишок)') > 0);
   assert.ok(env.ss.getSheetByName('Головне').isRowHiddenByUser(mainRow(env, 'Борги: я винен (залишок)')), 'борги вимкнено: рядки сховано');
 });
@@ -137,7 +137,7 @@ t('everything off: a plain journal with «Місяці», «Дні» and charts;
   c.mbsTick();                                                            // правку пропущено: застосує розклад
   assert.ok(K(c, 'MODS').every(m => c.modOn_(m.id) === false));
   assert.strictEqual(JSON.stringify(env.triggers.map(x => x.getHandlerFunction()).sort()), JSON.stringify(['mbsEdit', 'mbsTick']));
-  ['Старт', 'Журнал', 'Регулярні', 'Charts', 'charts_mob'].forEach(n => assert.strictEqual(env.ss.getSheetByName(n).isSheetHidden(), false, n));
+  ['⚡ Швидке підключення', 'Журнал', 'Регулярні', 'Charts', 'charts_mob'].forEach(n => assert.strictEqual(env.ss.getSheetByName(n).isSheetHidden(), false, n));
   ['Місяці', 'Дні', 'Довідник', 'Налаштування', 'Головне'].forEach(n => assert.strictEqual(env.ss.getSheetByName(n).isSheetHidden(), true, n + ': працює схованим'));
   assert.ok(env.ss.getSheetByName('Charts').charts.length >= 6 && env.ss.getSheetByName('charts_mob').charts.length >= 4);
   const r = c.buildMorning_(env.ss, {});
@@ -180,7 +180,7 @@ t('upgrade of a version-5 table to 6: backup, modules from what already works (c
 });
 
 t('upgrade of a version-11 table to 12: the module block moves from «Старт» to «Налаштування» with your choices; «Старт» keeps only the steps; nothing switches', () => {
-  const env = setup(), c = env.ctx, start = env.ss.getSheetByName('Старт'), set = st(env), MODS = K(c, 'MODS');
+  const env = setup(), c = env.ctx, start = env.ss.getSheetByName('⚡ Швидке підключення').setName('Старт'), set = st(env), MODS = K(c, 'MODS');   // таблиця до версії 15
   toggle(env, '📆 Календар платежів', 'так'); toggle(env, '💳 Кредитний ліміт і грейс', 'ні');
   const before = env.docProps.getProperty('mods');
   // таблиця версії 11: блок на «Старті» (рядки 24…), на «Налаштуваннях» його немає
@@ -201,7 +201,8 @@ t('upgrade of a version-11 table to 12: the module block moves from «Старт
   assert.strictEqual(set.getRange('A42').getValue(), '🧩 Модулі');
   const v = set.getRange('A44:B52').getValues(), mod = id => v[MODS.findIndex(m => m.id === id)][1];
   assert.ok(mod('cal') === 'так' && mod('credit') === 'ні' && mod('budgets') === 'ні' && mod('tg') === 'так', JSON.stringify(v));
-  assert.ok(start.getRange('A24:C36').getValues().every(r => r.join('') === '' || /Підтримати|безкоштовний/.test(r.join(''))), 'блок зі «Старту» прибрано');
+  assert.strictEqual(start.getName(), '⚡ Швидке підключення', 'крок 15: перейменовано');
+  assert.ok(start.getRange('A1:C110').getValues().every(r => String(r[1]) !== 'Увімкнено' && String(r[0]) !== '🧩 Модулі'), 'блок зі «Старту» прибрано');
   assert.strictEqual(start.getRange('B26').getDataValidation(), null, 'без списку «так / ні»');
   assert.ok(c.modOn_('cal') && !c.modOn_('credit') && !c.modOn_('budgets'), 'нічого не перемкнулось');
   assert.notStrictEqual(before, null);
@@ -232,8 +233,8 @@ t('panel step 5: a checkbox switches a module at once (sheets, rows, schedules),
   const a = c.cnModsApply();
   assert.ok(a.lines.length >= 9, 'усі модулі заново');
   assert.throws(() => c.cnModule('nope', true), /Невідомий модуль/);
-  const start = env.ss.getSheetByName('Старт').getRange('A6:C25').getValues();
-  assert.ok(start.some(x => /^✅ 5$/.test(x[0]) && /Модулі/.test(x[1])), 'на «Старті»: ✅ 5 Модулі');
+  const start = env.ss.getSheetByName('⚡ Швидке підключення').getRange('A7:C21').getValues();
+  assert.ok(start.some(x => x[0] === 'Модулі увімкнено' && /Борги й розстрочки/.test(x[1])), 'стан: модулі');
 });
 
 console.log(n + ' tests passed');

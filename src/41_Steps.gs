@@ -17,7 +17,7 @@ const STEPS = [
     done: ss => hasTrigger_(TRG.tick) && hasTrigger_(TRG.edit) && (!modOn_('backup') || hasTrigger_(TRG.backup)) &&
       (!modOn_('backup') || PropertiesService.getDocumentProperties().getProperty('prot') === 'off' || protectionOn_(ss)) },
   { v: 5, title: '🚀 «Старт», «Рахунки», сім\'я, «ФОП», виписки', auto: ss => stepFamily_(ss),
-    done: ss => [START_SHEET, ACC_SHEET, FOP_SHEET].every(n => !!ss.getSheetByName(n)) && !!ss.getSheetByName(JOURNAL) &&
+    done: ss => (!!ss.getSheetByName(START_SHEET) || !!ss.getSheetByName(START_OLD)) && [ACC_SHEET, FOP_SHEET].every(n => !!ss.getSheetByName(n)) && !!ss.getSheetByName(JOURNAL) &&
       journalHasAccounts_(ss) && String(ss.getSheetByName(SETTINGS_SHEET).getRange('A12').getValue()) === 'Сім\'я' },
   { v: 6, title: '🧩 Модулі, «Борги», грейс Mono, радник Gemini, оновлення', auto: ss => stepModules_(ss),
     done: ss => !!ss.getSheetByName(DEBTS_SHEET) && startHasModules_(ss) && !!PropertiesService.getDocumentProperties().getProperty('mods') &&
@@ -34,6 +34,12 @@ const STEPS = [
     done: ss => !ss.getSheetByName(SETTINGS_SHEET) || String(ss.getSheetByName(SETTINGS_SHEET).getRange('A26').getValue()) === ADV_RULES_HEAD },
   { v: 12, title: '🚀 Простіший «Старт»: кроки з номерами панелі; перемикачі модулів у «🚀 Підключення», крок 5', auto: ss => stepStart12_(ss),
     done: ss => !ss.getSheetByName(SETTINGS_SHEET) || (!modOldOnStart_(ss) && !!modBlock_(ss)) },
+  { v: 13, title: '🧭 Категорії з банку: зарплата за коментарем, погашення розстрочок, нові мережі й MCC, правила за отримувачем', auto: ss => stepRules13_(ss),
+    done: ss => !ss.getSheetByName(RULES_SHEET) || !!PropertiesService.getDocumentProperties().getProperty('rules_v13') },
+  { v: 14, title: '✅ Операції з банку з визначеною категорією одразу «✅ факт» (вимкнути: «Налаштування», B35)', auto: ss => settingsAutoFactUpgrade_(ss).map(x => 'Додано: ' + x + '.'),
+    done: ss => !ss.getSheetByName(SETTINGS_SHEET) || String(ss.getSheetByName(SETTINGS_SHEET).getRange('A35').getValue()) === AUTO_FACT_LABEL },
+  { v: 15, title: '⚡ «Старт» став «Швидким підключенням»: стан таблиці й покрокова інструкція для ШІ (Gemini чи іншого)', auto: ss => stepQuick15_(ss),
+    done: ss => !ss.getSheetByName(START_OLD) && !!ss.getSheetByName(START_SHEET) && String(ss.getSheetByName(START_SHEET).getRange('A1').getValue()) === QUICK_TITLE },
 ];
 /** Остання версія таблиці в цьому коді. */
 function schemaLast_() { return STEPS[STEPS.length - 1].v; }
@@ -70,7 +76,7 @@ function stepMain_(ss) {
   buildIfMissing_(ss, MAIN_SHEET, buildMain_, out);
   buildIfMissing_(ss, FOP_SHEET, buildFop_, out);
   buildIfMissing_(ss, CHECK_SHEET, buildCheck_, out);
-  buildIfMissing_(ss, START_SHEET, buildStart_, out);
+  if (!ss.getSheetByName(START_OLD)) buildIfMissing_(ss, START_SHEET, buildStart_, out);   // старий «Старт» перейменує крок 15
   return out.length ? ['Додано: ' + out.join(', ') + '.'] : ['Усе вже було.'];
 }
 
@@ -100,7 +106,7 @@ function stepFamily_(ss) {
   if (ss.getSheetByName(MONTHS_SHEET)) { buildMonths_(ss); out.push('«' + MONTHS_SHEET + '»: фільтр «Хто», без рахунків ФОП'); }
   if (ss.getSheetByName(MAIN_SHEET)) buildMain_(ss);
   if (ss.getSheetByName(CHECK_SHEET)) { buildCheck_(ss); out.push('«' + CHECK_SHEET + '»: ФОП і рахунки'); }
-  buildIfMissing_(ss, START_SHEET, buildStart_, out);
+  if (!ss.getSheetByName(START_OLD)) buildIfMissing_(ss, START_SHEET, buildStart_, out);   // старий «Старт» перейменує крок 15
   if (PropertiesService.getDocumentProperties().getProperty('prot') !== 'off') applyProtection_(ss);
   return out.length ? ['Додано: ' + out.join(', ') + '.'] : ['Усе вже було.'];
 }
@@ -209,16 +215,41 @@ function stepRules_(ss) {
 function stepStart12_(ss) {
   const out = [], was = modRead_(ss);
   if (!modBlock_(ss) || modBlock_(ss).old) { modBlockBuild_(ss, was); out.push('перемикачі модулів: ' + MOD_WHERE); }
-  const st = ss.getSheetByName(START_SHEET);
+  const st = ss.getSheetByName(START_OLD);
   if (st && modOldOnStart_(ss)) {
     const r = st.getRange(MOD_OLD_HEAD, 1, Math.min(MODS.length + 4, st.getMaxRows() - MOD_OLD_HEAD + 1), 4);
     r.clearContent(); r.clearDataValidations(); r.setFontWeight('normal').setFontSize(10).setFontColor('#000000').setHorizontalAlignment('left');
-    out.push('«' + START_SHEET + '»: лише кроки, з номерами кроків панелі');
+    out.push('«' + START_OLD + '»: без блоку модулів');
   }
   if (PropertiesService.getDocumentProperties().getProperty('prot') !== 'off' && modOn_('backup')) { try { applyProtection_(ss); } catch (e) { /* захист: наступного разу */ } }
   try { modulesIfChanged_(ss); } catch (e) { /* застосує mbsTick */ }
   try { startRefresh_(ss); } catch (e) { /* чекліст оновиться завтра */ }
   return out.length ? ['Оновлено: ' + out.join('; ') + '. Увімкнені модулі не змінились.'] : ['Усе вже було.'];
+}
+
+/** Версія 13: нові стартові правила у вільні рядки «Правил» (ваші йдуть раніше й виграють), «отримувач» у «Де шукати». */
+function stepRules13_(ss) {
+  const add = rulesUpgrade13_(ss);
+  return [add.length ? 'Додано стартових правил: ' + add.length + ' (' + add.filter((x, i, a) => a.indexOf(x) === i).join(', ') + ').' : 'Нових стартових правил не треба.',
+    'Без правила: переказ між своїми рахунками, закриття плану й категорія за історією ставляться самі. «Де шукати: отримувач»: назва, IBAN чи ЄДРПОУ (меню «🔎 Сирі дані Mono»).'];
+}
+
+/** Версія 15: «Старт» → «⚡ Швидке підключення» (стан і інструкція для ШІ); першою вкладкою, на виду. Модулі й дані не змінюються. */
+function stepQuick15_(ss) {
+  const out = [], old = ss.getSheetByName(START_OLD);
+  if (old && !ss.getSheetByName(START_SHEET)) { old.setName(START_SHEET); out.push('«' + START_OLD + '» тепер «' + START_SHEET + '»'); }
+  else if (old) { old.setName(START_OLD + ' (старий)'); old.hideSheet(); out.push('старий «' + START_OLD + '» сховано як «' + START_OLD + ' (старий)»'); }
+  const sh = ss.getSheetByName(START_SHEET);
+  if (!sh) { buildStart_(ss); out.push('аркуш «' + START_SHEET + '»'); }
+  else {
+    const r = sh.getRange(1, 1, Math.min(sh.getMaxRows(), START_ROWS + 5), Math.min(sh.getMaxColumns(), 4));
+    r.clearContent(); r.clearDataValidations();
+    startRefresh_(ss);
+  }
+  sheetsReorder_(ss);
+  sheetsVisibility_(ss);
+  if (PropertiesService.getDocumentProperties().getProperty('prot') !== 'off' && modOn_('backup')) { try { applyProtection_(ss); } catch (e) { /* захист: наступного разу */ } }
+  return ['Оновлено: ' + out.join('; ') + '.', 'Відкрийте Gemini в таблиці (чи інший ШІ) і напишіть: «Прочитай аркуш «' + START_SHEET + '» і налаштуй зі мною таблицю».'];
 }
 
 /** Блок модулів має рядок для кожного модуля (нові модулі дописуються в кінець). */

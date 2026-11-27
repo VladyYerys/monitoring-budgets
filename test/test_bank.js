@@ -42,10 +42,12 @@ t('statements from the folder: Google Sheet read-only, personal-looking table is
   env.addSheetFile(folder, 'Monitoring Budget (особиста)', [['Дата', 'Сума'], ['01.11.2026', '1']], ['m', 'y', 'Журнал']);
   c.importStatements();
   const html = env.calls.dialogs.pop().html;
-  assert.ok(/нових чернеток 2/.test(html) && /особисту таблицю/.test(html), html);
+  assert.ok(/нових 2 \(одразу «✅ факт»: 1\)/.test(html) && /особисту таблицю/.test(html), html);
   const rows = c.readJournal_(env.ss).filter(o => !o.blank);
   assert.strictEqual(rows.length, 2);
-  assert.ok(rows.every(o => o.acct === 'Ощад картка' && o.e === '🏦 чернетка' && /^csv:/.test(o.bank[0])));
+  assert.ok(rows.every(o => o.acct === 'Ощад картка' && /^csv:/.test(o.bank[0])));
+  assert.strictEqual(rows.find(o => o.b === 512.4).e, '✅ факт', 'категорію визначено: одразу факт');
+  assert.strictEqual(rows.find(o => o.b === 1000).e, '🏦 чернетка', 'червоний переказ: чернетка');
   assert.strictEqual(rows.find(o => o.b === 512.4).c, 'Продукти');
   assert.strictEqual(rows.find(o => o.b === 1000).c, '↔ Переказ (уточніть)');
   assert.strictEqual(c.accList_(env.ss)[0].kind, 'основна картка', 'перший рахунок: основна картка');

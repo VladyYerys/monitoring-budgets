@@ -11,7 +11,7 @@ function setup() {
   env.ctx.setupTemplate();
   return env;
 }
-const st = env => env.ss.getSheetByName('Старт');
+const st = env => env.ss.getSheetByName('⚡ Швидке підключення');
 function toggle(env, id, v) {
   const r = env.ss.getSheetByName('Налаштування').getRange(44 + K(env.ctx, 'MODS').findIndex(m => m.id === id), 2);
   r.setValue(v);
@@ -20,7 +20,7 @@ function toggle(env, id, v) {
 const titles = sh => (sh.charts || []).map(ch => ch.opts.title);
 const by = (sh, s) => sh.charts.find(ch => ch.opts.title.indexOf(s) >= 0);
 const SERVICE = ['Місяці', 'Дні', 'Довідник', 'Налаштування', 'Головне', 'Правила', 'Рахунки', 'Залишки банку', 'Банк', 'Історія місяців', 'Історія категорій', 'Перевірка'];
-const VISIBLE = ['Старт', 'Журнал', 'Регулярні', 'Charts', 'charts_mob'];
+const VISIBLE = ['⚡ Швидке підключення', 'Журнал', 'Регулярні', 'Charts', 'charts_mob'];
 
 t('«Дані графіків»: hidden; key figures by name; categories, «що зросло», groups, types, 60 days, pace, forecast, holes with limits from «Charts», reasons', () => {
   const env = setup(), c = env.ctx, d = env.ss.getSheetByName('Дані графіків');
@@ -133,7 +133,7 @@ t('credit module off → no limit tiles, charts or reasons (8 + 6 charts); on �
   assert.strictEqual(sh.getMaxRows(), 221);
 });
 
-t('module «🗂 Усі аркуші»: off by default (only Старт, Журнал, Регулярні, Charts, charts_mob on view; the rest works hidden), on → all shown (ФОП and Борги only with their modules), off → hidden', () => {
+t('module «🗂 Усі аркуші»: off by default (only ⚡ Швидке підключення, Журнал, Регулярні, Charts, charts_mob on view; the rest works hidden), on → all shown (ФОП and Борги only with their modules), off → hidden', () => {
   const env = setup();
   const hidden = () => SERVICE.map(s => env.ss.getSheetByName(s).isSheetHidden());
   const shown = () => env.ss.getSheets().filter(s => !s.isSheetHidden()).map(s => s.getName());
@@ -146,12 +146,11 @@ t('module «🗂 Усі аркуші»: off by default (only Старт, Жур�
   assert.strictEqual(env.ss.getSheetByName('ФОП').isSheetHidden(), false, 'ФОП: модуль увімкнено');
   assert.strictEqual(env.ss.getSheetByName('Борги').isSheetHidden(), true, 'Борги: модуль вимкнено');
   assert.strictEqual(env.ss.getSheetByName('Дані графіків').isSheetHidden(), true);
-  assert.ok(env.ss.getSheetByName('Старт').getRange('A6:C25').getValues().every(r => !/видно з модулем/.test(r[2])), 'підказка «видно з модулем» зникла');
   toggle(env, 'service', 'ні');
   assert.ok(hidden().every(Boolean));
   same(shown(), VISIBLE);
   env.ctx.startRefresh_(env.ss);
-  assert.ok(env.ss.getSheetByName('Старт').getRange('A6:C25').getValues().some(r => /видно з модулем «🗂 Усі аркуші», крок 5/.test(r[2])), 'де шукати сховане');
+  assert.ok(env.ss.getSheetByName('⚡ Швидке підключення').getRange('A7:C21').getValues().some(r => r[0] === 'Модулі увімкнено' && !/Усі аркуші/.test(r[1])), 'стан: «Усі аркуші» вимкнено');
 });
 
 t('upgrade of a version-8 table to 9: backup first, «Charts» and «charts_mob» built, old chart data rebuilt, «📱 Телефон» removed, old charts off «Головне» (yours kept)', () => {

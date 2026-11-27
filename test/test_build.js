@@ -15,11 +15,11 @@ const allFormulas = env => env.ss.getSheets().flatMap(sh => Array.from(sh.cells.
 t('all sheets, the empty starter sheet removed, marked as template, success dialog', () => {
   const env = built();
   assert.strictEqual(JSON.stringify(env.ss.getSheets().map(s => s.getName())), JSON.stringify(
-    ['Старт', 'Журнал', 'Регулярні', 'Charts', 'charts_mob', 'Місяці', 'Дні', 'Довідник', 'Налаштування', 'ФОП', 'Борги', 'Головне', 'Правила', 'Рахунки', 'Залишки банку',
+    ['⚡ Швидке підключення', 'Журнал', 'Регулярні', 'Charts', 'charts_mob', 'Місяці', 'Дні', 'Довідник', 'Налаштування', 'ФОП', 'Борги', 'Головне', 'Правила', 'Рахунки', 'Залишки банку',
       'Банк', 'Історія місяців', 'Історія категорій', 'Перевірка', 'Дані графіків']));
   const hidden = env.ss.getSheets().filter(s => s.isSheetHidden()).map(s => s.getName());
   const shown = env.ss.getSheets().filter(s => !s.isSheetHidden()).map(s => s.getName());
-  assert.strictEqual(JSON.stringify(shown), JSON.stringify(['Старт', 'Журнал', 'Регулярні', 'Charts', 'charts_mob']), 'на виду лише п\'ять вкладок: ' + shown);
+  assert.strictEqual(JSON.stringify(shown), JSON.stringify(['⚡ Швидке підключення', 'Журнал', 'Регулярні', 'Charts', 'charts_mob']), 'на виду лише п\'ять вкладок: ' + shown);
   assert.strictEqual(hidden.length, 15);
   assert.strictEqual(env.docProps.getProperty('mbs'), 'monitoring-budgets-template');
   assert.strictEqual(env.docProps.getProperty('schema_v'), String(env.ctx.schemaLast_()));

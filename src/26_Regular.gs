@@ -152,7 +152,7 @@ function regWanted_(rules, rows, today, horizon) {
       const key = REG_TAG + rule.name + ': ' + ym.slice(5) + '.' + ym.slice(0, 4);
       const plan = rows.find(o => isPlan_(o.e) && o.d === key && o.key);              // план уже стоїть (дату могли перенести)
       const near = x => Math.abs(dayDiff_(x, date)) <= REG_CLOSE_DAYS || (!!plan && Math.abs(dayDiff_(x, plan.key)) <= REG_CLOSE_DAYS);
-      let hit = facts.find(o => !claimed[o.row] && o.d === key);
+      let hit = facts.find(o => !claimed[o.row] && (o.d === key || o.d.indexOf(key + ' · ') === 0));   // « · …»: план закрила операція з банку
       if (!hit) {
         hit = facts.find(o => !claimed[o.row] && o.c === rule.cat && near(o.key) &&
           (Math.abs(Number(o.b) - rule.amt) <= rule.amt * REG_TOL + 0.005 || (o.d && o.d.indexOf(rule.name) >= 0)));

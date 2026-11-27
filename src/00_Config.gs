@@ -8,7 +8,7 @@
  */
 
 const TEMPLATE_MARK = 'monitoring-budgets-template';   // мітка шаблону: її шукає CI перед заливкою (ci/guard.js)
-const TEMPLATE_VERSION = '0.4.8';
+const TEMPLATE_VERSION = '0.5.0';
 const SUPPORT_URL = 'https://send.monobank.ua/jar/6ChdYHjkd9';   // «❤️ Підтримати автора»: публічна банка автора
 const APP_NAME = 'Monitoring Budgets';
 const REPO_URL = 'https://github.com/VladyYerys/monitoring-budgets';                 // відкритий код, «Що нового», питання (issues)
@@ -27,7 +27,7 @@ const RULES_SHEET = 'Правила';
 const BANK_SHEET = 'Банк';
 const MAIN_SHEET = 'Головне';
 const CHECK_SHEET = 'Перевірка';
-const START_SHEET = 'Старт';
+const START_SHEET = '⚡ Швидке підключення';                          // до версії 15: «Старт»
 const ACC_SHEET = 'Рахунки';
 const FOP_SHEET = 'ФОП';
 const DEBTS_SHEET = 'Борги';
@@ -81,7 +81,8 @@ const D_RANGE = (c, a, b) => "'" + DICT_SHEET + "'!$" + c + '$' + (a || D_FIRST)
 
 /* ---------- налаштування ---------- */
 const SET = { start: 'B4', bday: 'B5', goal: 'B6', card: 'B7', margin: 'B8', version: 'B9', rate: 'B10', mode: 'B13', advisor: 'B23', support: 'B24',
-  prio: 'B27', cushion: 'B28', floor: 'B29', debtsMust: 'B30', fopPct: 'B31', rules: 'B32' };   // B27…B32: «Мої правила для радника Gemini»
+  prio: 'B27', cushion: 'B28', floor: 'B29', debtsMust: 'B30', fopPct: 'B31', rules: 'B32',
+  autoFact: 'B35' };                                                     // B35: операції з банку з категорією одразу «✅ факт»   // B27…B32: «Мої правила для радника Gemini»
 const SET_MEMBERS_FIRST = 14, SET_MEMBERS_N = 5, SET_SHARED_ROW = 19, SET_ALL_ROW = 20;   // учасники B14:B18, «спільне» B19, «уся сім'я» B20
 const MODE_SOLO = 'одна людина', MODE_FAMILY = 'сім\'я', WHO_SHARED = 'спільне', WHO_ALL = 'уся сім\'я';
 const SET_REF = k => "'" + SETTINGS_SHEET + "'!$" + SET[k].charAt(0) + '$' + SET[k].slice(1);

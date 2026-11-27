@@ -88,7 +88,7 @@ function versionNow() {
 function migratePlan_() {
   const rows = (a, b) => a + ':' + b;
   return [
-    { sheet: SETTINGS_SHEET, byLabel: [4, 5, 6, 7, 8, 10, 13, 14, 15, 16, 17, 18, 23, 24, 27, 28, 29, 30, 31, 32] },
+    { sheet: SETTINGS_SHEET, byLabel: [4, 5, 6, 7, 8, 10, 13, 14, 15, 16, 17, 18, 23, 24, 27, 28, 29, 30, 31, 32, 35] },
     { sheet: DICT_SHEET, ranges: [rows('A' + D_FIRST, 'G' + D_LAST), rows('I' + D_HOLES_FIRST, 'J' + D_HOLES_LAST), rows('K' + D_REASONS_FIRST, 'K' + D_REASONS_LAST)] },
     { sheet: RULES_SHEET, ranges: [rows('A' + RULES_FIRST, 'G' + RULES_LAST)] },
     { sheet: ACC_SHEET, ranges: [rows('A' + ACC_FIRST, 'H' + ACC_LAST)] },

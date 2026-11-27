@@ -299,7 +299,7 @@ details{margin:8px 0}summary{cursor:pointer;color:#5f6368}
   function modsAll() { run('cnModsApply', [], modShow, '⏳ Застосовую всі модулі…'); }
   function finish() {
     run('cnFinish', [], function (r) {
-      note('<span class="ok">✓ Готово. Чекліст «Старту»: ' + r.done + ' з ' + r.need + '.</span>' + (r.warnings.length ? '<br>' + h(r.warnings.join(' ')) : '') +
+      note('<span class="ok">✓ Готово. «⚡ Швидке підключення»: основного готово ' + r.done + ' з ' + r.need + '.</span>' + (r.warnings.length ? '<br>' + h(r.warnings.join(' ')) : '') +
         ' Модулі: крок 5. <a href="#" onclick="google.script.host.close();return false">Закрити</a>');
     });
   }
