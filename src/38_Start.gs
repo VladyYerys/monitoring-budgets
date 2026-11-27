@@ -1,63 +1,72 @@
-/** 38_Start.gs: аркуш «Старт» з чеклістом і модулями, демо-місяць. Підключення (картка, Telegram, регулярні, Gemini): 44_Connect.gs. */
+/** 38_Start.gs: аркуш «Старт»: кроки з номерами кроків панелі «🚀 Підключення», демо-місяць. Підключення: 44_Connect.gs. */
 
 /*
  * У копії шаблону розклади й дозволи не переносяться, тож усе починається з меню «📊 Monitoring Budgets → 🚀 Підключення»:
- * скрипт добудовує, чого бракує, і відкриває бічну панель з чотирма кроками (44_Connect.gs).
- * Чекліст на «Старті» оновлює скрипт (раз на день, після «Готово» в панелі «🚀 Підключення» і з меню): ✓ зроблено, • ще ні, «—» не потрібно.
+ * скрипт добудовує, чого бракує, і відкриває бічну панель з п'ятьма кроками (44_Connect.gs).
+ * «Старт» оновлює скрипт (раз на день, після «Готово», галочок модулів і з меню). Рядок: «✅ 1» зроблено, «⬜ 2» ще ні;
+ * число: крок у панелі, «·»: поза панеллю. Непотрібне (вимкнений модуль, «я сам» без сім'ї) не показується.
+ * Модулі: «🚀 Підключення», крок 5 (до версії 12 блок «🧩 Модулі» стояв тут, рядки 24…).
  * Демо-місяць: вигадані операції з позначкою «[демо]» у коментарі, щоб одразу побачити «Charts» і «charts_mob»; «🧹 Очистити демо» прибирає все.
  */
 
-const START_FIRST = 6;
+const START_FIRST = 6, START_ROWS = 30;                                  // кроки з рядка 6; місце під кроки й низ: 30 рядків
 const DEMO_TAG = '[демо] ';
+const P_STEP = 'крок ';                                                 // «Де»: крок панелі «🚀 Підключення»
 
 function buildStart_(ss) {
-  const sh = ensureSize_(sheetOf_(ss, START_SHEET), MOD_FIRST + MODS.length + 5, 4);
+  const sh = ensureSize_(sheetOf_(ss, START_SHEET), START_FIRST + START_ROWS, 4);
   sh.getRange(1, 1).setValue('🚀 Старт').setFontWeight('bold').setFontSize(14);
-  sh.getRange(2, 1).setValue('Почніть з меню «📊 ' + APP_NAME + ' → 🚀 Підключення» (на комп\'ютері: на телефоні меню скриптів немає). ' +
-    'Кроки нижче позначаються самі.').setWrap(false);
-  sh.getRange(START_FIRST - 1, 1, 1, 3).setValues([['', 'Крок', 'Як']]).setFontWeight('bold');
-  startModulesBlock_(ss, sh);
+  if (!startHasModules_(ss) && ss.getSheetByName(SETTINGS_SHEET)) modBlockBuild_(ss);
   startRefresh_(ss);
   return sh;
 }
 
-/** [перевірка, крок, як]. Перевірка → true (✓), false (•), null (не потрібно). */
+/** Кроки: { ok: true (✅) / false (⬜) / null (не потрібно: не показується), n: крок панелі (0: поза панеллю), what, where }. */
 function startSteps_(ss) {
-  const dp = PropertiesService.getDocumentProperties(), set = ss.getSheetByName(SETTINGS_SHEET), accs = accList_(ss), fam = familyMode_(ss);
+  const dp = PropertiesService.getDocumentProperties(), accs = accList_(ss), fam = familyMode_(ss);
   const has = fn => hasTrigger_(fn), rows = ss.getSheetByName(JOURNAL) ? readJournal_(ss).filter(o => !o.blank) : [];
   const cp = ss.getSheetByName(CP_SHEET) ? ss.getSheetByName(CP_SHEET).getRange(CP_FIRST, 1, 30, 2).getValues().some(r => r[0] && r[1] !== '') : false;
-  const cs = checkState_(ss), up = PropertiesService.getUserProperties(), fops = fopList_(ss);
-  const hid = modOn_('service') ? '' : ' (сховано: «' + modName_('service') + '»: так)';
+  const cs = checkState_(ss), up = PropertiesService.getUserProperties(), fops = fopList_(ss), mono = !!up.getProperty('mono_token');
+  const hid = modOn_('service') ? '' : ' (видно з модулем «' + modName_('service') + '», крок 5)';
+  const P = P_STEP;
   return [
-    [!!dp.getProperty('wiz_done'), '«🚀 Підключення» пройдено (кнопка «Готово»)', 'меню «📊 ' + APP_NAME + ' → 🚀 Підключення»'],
-    [!!(set && set.getRange(SET.start).getValue()), 'Старт обліку «моїх грошей», вид картки, день доходу', '«🚀 Підключення» або аркуш «' + SETTINGS_SHEET + '»' + hid],
-    [fam ? members_(ss).length >= 2 : null, 'Учасники сім\'ї (до 5)', '«🚀 Підключення» («Сім\'я») або «' + SETTINGS_SHEET + '»' + hid],
-    [accs.length > 0, 'Банк: Mono, ПриватБанк для ФОП або виписка', '«🚀 Підключення», крок 1'],
-    [up.getProperty('mono_token') || up.getProperty('pb_token') ? has(TRG.imp) : null, 'Імпорт з банку за розкладом (ваш)', '«🚀 Підключення», крок 1: «Імпорт з банку щодня»'],
-    [cp, 'Залишок на картці (контрольна точка)', 'сам з Mono або вручну на «' + CP_SHEET + '»' + hid],
-    [rows.length > 0, 'Перші записи в журналі', 'аркуш «' + JOURNAL + '» або демо-місяць'],
-    [ss.getSheetByName(REG_SHEET) ? regOwn_(ss).length > 0 : null, 'Регулярні платежі й доходи (оренда, підписки, зарплата)', '«🚀 Підключення», крок 3, або аркуш «' + REG_SHEET + '»'],
-    [modOn_('tg') ? tgConnected_() : null, 'Telegram-бот (ранковий підсумок, звіти)', '«🚀 Підключення», крок 2'],
-    [modOn_('cal') ? !!dp.getProperty('cal_stat') : null, 'Календар платежів', 'увімкнено модулем; оновлюється сам'],
-    [modOn_('fop') ? fops.length > 0 : null, 'ФОП: група, ставки', 'аркуш «' + FOP_SHEET + '»' + hid],
-    [modOn_('debts') ? debtsList_(ss).length > 0 : null, 'Борги й розстрочки', 'аркуш «' + DEBTS_SHEET + '»' + hid],
-    [modOn_('advisor') ? !!dp.getProperty('adv_doc_id') : null, 'Радник Gemini: знімок і навичка', '«🚀 Підключення», крок 4'],
-    [cs.none ? null : cs.bad.length === 0, '«' + CHECK_SHEET + '»: усе OK', 'аркуш «' + CHECK_SHEET + '»' + hid],
-  ];
+    { n: 0, ok: fam ? members_(ss).length >= 2 : null, what: 'Учасники сім\'ї (до 5)', where: 'угорі панелі: «Сім\'я»' },
+    { n: 1, ok: accs.length > 0, what: 'Картка й банк: Mono, ПриватБанк для ФОП або виписка', where: P + '1' },
+    { n: 1, ok: mono || up.getProperty('pb_token') ? has(TRG.imp) : null, what: 'Імпорт з банку щодня', where: P + '1: «Імпорт з банку щодня»' },
+    { n: 1, ok: cp, what: 'Залишок на картці (контрольна точка)', where: mono ? 'сам з Mono' : 'аркуш «' + CP_SHEET + '»' + hid },
+    { n: 1, ok: modOn_('fop') ? fops.length > 0 : null, what: 'ФОП: група й ставки', where: P + '1: «Рахунок ФОП»' },
+    { n: 2, ok: modOn_('tg') ? tgConnected_() : null, what: 'Telegram-бот: ранковий підсумок і звіти', where: P + '2' },
+    { n: 3, ok: ss.getSheetByName(REG_SHEET) ? regOwn_(ss).length > 0 : null, what: 'Регулярні платежі й доходи (оренда, підписки, зарплата)', where: P + '3 або аркуш «' + REG_SHEET + '»' },
+    { n: 4, ok: modOn_('advisor') ? !!dp.getProperty('adv_doc_id') : null, what: 'Радник Gemini: знімок і навичка', where: P + '4' },
+    { n: 5, ok: !!dp.getProperty('mods_seen') || !!dp.getProperty('wiz_done'), what: 'Модулі: що увімкнути', where: P + '5 (меню «🧩 Модулі»)' },
+    { n: 0, ok: rows.length > 0, what: 'Перші записи в журналі', where: 'аркуш «' + JOURNAL + '» або «Демо-місяць» у панелі' },
+    { n: 0, ok: modOn_('cal') ? !!dp.getProperty('cal_stat') : null, what: 'Календар платежів', where: 'оновлюється сам' },
+    { n: 0, ok: modOn_('debts') ? debtsList_(ss).length > 0 : null, what: 'Борги й розстрочки', where: 'аркуш «' + DEBTS_SHEET + '»' + hid },
+    { n: 0, ok: cs.none ? null : cs.bad.length === 0, what: '«' + CHECK_SHEET + '»: усе OK',
+      where: cs.none || !cs.bad.length ? 'перевіряється сам' : 'аркуш «' + CHECK_SHEET + '»: ' + cs.bad.length + ' ⚠️' + hid },
+  ].filter(x => x.ok !== null);
 }
 
-/** Оновити чекліст «Старту» і нижній блок «Підтримати». */
+/** Оновити «Старт»: кроки, смужка «готово», низ з «Підтримати». */
 function startRefresh_(ss) {
   const sh = ss.getSheetByName(START_SHEET);
   if (!sh) return null;
-  const steps = startSteps_(ss);
-  sh.getRange(START_FIRST, 1, steps.length, 3).setValues(steps.map(s => [s[0] === null ? '—' : s[0] ? '✓' : '•', s[1], s[2]]));
-  const done = steps.filter(s => s[0] === true).length, need = steps.filter(s => s[0] !== null).length;
-  sh.getRange(3, 1).setValue('Готово: ' + done + ' з ' + need + (done === need ? ' ✅' : '')).setFontWeight('bold');
-  const foot = START_FIRST + steps.length + 2;
-  if (MOD_HEAD > START_FIRST + steps.length) sh.getRange(START_FIRST + steps.length, 1, MOD_HEAD - START_FIRST - steps.length, 3).clearContent();   // старий низ (крок додався)
-  sh.getRange(foot, 1, 2, 1).setValues([['Шаблон безкоштовний і з відкритим кодом (github.com/VladyYerys/monitoring-budgets).'], ['Корисний?']]);
-  setF_(sh.getRange(foot + 1, 2), [['=HYPERLINK("' + SUPPORT_URL + '","❤️ Підтримати автора")']]);
+  const steps = startSteps_(ss), done = steps.filter(x => x.ok).length, need = steps.length;
+  ensureSize_(sh, START_FIRST + START_ROWS, 4);
+  const lim = modOldOnStart_(ss) ? MOD_OLD_HEAD - START_FIRST : START_ROWS;    // старий блок модулів (до версії 12) не чіпаємо
+  sh.getRange(START_FIRST, 1, lim, 3).clearContent();
+  sh.getRange(START_FIRST, 1, lim, 3).setFontWeight('normal').setFontColor('#000000');
+  sh.getRange(2, 1).setValue('Меню «📊 ' + APP_NAME + ' → 🚀 Підключення» на комп\'ютері (на телефоні меню скриптів немає). ' +
+    'Число: крок у панелі. Галочки ставляться самі.').setWrap(false);
+  sh.getRange(3, 1).setValue('▰'.repeat(done) + '▱'.repeat(need - done) + '  ' + done + ' з ' + need + (done === need ? ' ✅' : '')).setFontWeight('bold');
+  sh.getRange(START_FIRST - 1, 1, 1, 3).setValues([['', 'Крок', 'Де']]).setFontWeight('bold');
+  sh.getRange(START_FIRST, 1, steps.length, 3).setValues(steps.map(x => [(x.ok ? '✅ ' : '⬜ ') + (x.n || '·'), x.what, x.where.indexOf(P_STEP) === 0 ? '«🚀 Підключення», ' + x.where : x.where]));
+  const foot = START_FIRST + steps.length + 1;
+  if (foot + 1 <= START_FIRST + lim - 1) {
+    setF_(sh.getRange(foot, 1), [['=HYPERLINK("' + SUPPORT_URL + '","❤️ Підтримати автора")']]);
+    sh.getRange(foot, 2).setValue('Шаблон безкоштовний, код відкритий: github.com/VladyYerys/monitoring-budgets');
+    sh.getRange(foot, 2).setFontColor('#5f6368');
+  }
   PropertiesService.getDocumentProperties().setProperty('start_day', todayKey_(ss));
   return { done: done, need: need };
 }

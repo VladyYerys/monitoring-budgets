@@ -19,7 +19,7 @@ const STEPS = [
   { v: 5, title: '🚀 «Старт», «Рахунки», сім\'я, «ФОП», виписки', auto: ss => stepFamily_(ss),
     done: ss => [START_SHEET, ACC_SHEET, FOP_SHEET].every(n => !!ss.getSheetByName(n)) && !!ss.getSheetByName(JOURNAL) &&
       journalHasAccounts_(ss) && String(ss.getSheetByName(SETTINGS_SHEET).getRange('A12').getValue()) === 'Сім\'я' },
-  { v: 6, title: '🧩 Модулі на «Старті», «Борги», грейс Mono, радник Gemini, оновлення', auto: ss => stepModules_(ss),
+  { v: 6, title: '🧩 Модулі, «Борги», грейс Mono, радник Gemini, оновлення', auto: ss => stepModules_(ss),
     done: ss => !!ss.getSheetByName(DEBTS_SHEET) && startHasModules_(ss) && !!PropertiesService.getDocumentProperties().getProperty('mods') &&
       mainHasLabel_(ss, 'Грейс: строк') &&
       String(ss.getSheetByName(SETTINGS_SHEET).getRange('A22').getValue()) === 'Радник і нагадування' },
@@ -32,6 +32,8 @@ const STEPS = [
     done: ss => (!startHasModules_(ss) || modBlockFull_(ss)) && (!ss.getSheetByName(REG_SHEET) || !!PropertiesService.getDocumentProperties().getProperty('reg_ex')) },
   { v: 11, title: '🤖 «Мої правила» для радника Gemini на «Налаштуваннях»; навичка Gemini версії ' + ADV_SKILL.v, auto: ss => stepRules_(ss),
     done: ss => !ss.getSheetByName(SETTINGS_SHEET) || String(ss.getSheetByName(SETTINGS_SHEET).getRange('A26').getValue()) === ADV_RULES_HEAD },
+  { v: 12, title: '🚀 Простіший «Старт»: кроки з номерами панелі; перемикачі модулів у «🚀 Підключення», крок 5', auto: ss => stepStart12_(ss),
+    done: ss => !ss.getSheetByName(SETTINGS_SHEET) || (!modOldOnStart_(ss) && !!modBlock_(ss)) },
 ];
 /** Остання версія таблиці в цьому коді. */
 function schemaLast_() { return STEPS[STEPS.length - 1].v; }
@@ -104,14 +106,13 @@ function stepFamily_(ss) {
 }
 
 /**
- * Версія 6: модулі на «Старті» (стан з того, що вже працює), аркуш «Борги», рядки грейсу й боргів на «Головному»,
+ * Версія 6: модулі (стан з того, що вже працює), аркуш «Борги», рядки грейсу й боргів на «Головному»,
  * ставка комісії, радник і нагадування на «Налаштуваннях». Ваші дані не змінюються. Наприкінці модулі застосовуються.
  */
 function stepModules_(ss) {
   const out = [].concat(settingsUpgrade6_(ss));
   buildIfMissing_(ss, DEBTS_SHEET, buildDebts_, out);
-  const st = ss.getSheetByName(START_SHEET);
-  if (st && !startHasModules_(ss)) { ensureSize_(st, MOD_FIRST + MODS.length + 5, 4); startModulesBlock_(ss, st); out.push('блок «🧩 Модулі» на «' + START_SHEET + '»'); }
+  if (ss.getSheetByName(SETTINGS_SHEET) && !startHasModules_(ss)) { modBlockBuild_(ss); out.push('перемикачі модулів (' + MOD_WHERE + ')'); }
   if (ss.getSheetByName(MAIN_SHEET) && !mainHasLabel_(ss, 'Грейс: строк')) { buildMain_(ss); out.push('«' + MAIN_SHEET + '»: грейс Mono й борги'); }
   if (PropertiesService.getDocumentProperties().getProperty('prot') !== 'off' && modOn_('backup')) applyProtection_(ss);
   const lines = modulesApply_(ss, true);
@@ -133,13 +134,13 @@ function stepTabs_(ss) {
   const out = [];
   buildIfMissing_(ss, REG_SHEET, buildRegular_, out);
   if (ss.getSheetByName(DAYS_SHEET) && ss.getSheetByName(DICT_SHEET) && !ss.getSheetByName(CH_SHEET)) { buildChartsData_(ss); out.push('«' + CH_SHEET + '» (схований)'); }
-  if (ss.getSheetByName(START_SHEET) && !modBlockFull_(ss)) { modBlockAdd_(ss); out.push('модуль «' + modName_('service') + '» на «' + START_SHEET + '»'); }
+  if (ss.getSheetByName(SETTINGS_SHEET) && !modBlockFull_(ss)) { modBlockAdd_(ss); out.push('модуль «' + modName_('service') + '»'); }
   if (PropertiesService.getDocumentProperties().getProperty('prot') !== 'off' && modOn_('backup')) applyProtection_(ss);
   try { sheetsReorder_(ss); } catch (e) { /* порядок вкладок не критичний */ }
   const lines = modulesApply_(ss, false);
   sheetsVisibility_(ss);
   return (out.length ? ['Додано: ' + out.join(', ') + '.'] : ['Усе вже було.'])
-    .concat(lines.filter(l => l.indexOf('Змін немає') < 0), [modOn_('service') ? 'Усі аркуші видно.' : 'Решту аркушів сховано: показати на «' + START_SHEET + '», «' + modName_('service') + '»: так.']);
+    .concat(lines.filter(l => l.indexOf('Змін немає') < 0), [modOn_('service') ? 'Усі аркуші видно.' : 'Решту аркушів сховано: показати можна модулем «' + modName_('service') + '» (' + MOD_WHERE + ').']);
 }
 
 /**
@@ -177,17 +178,18 @@ function stepVisible_(ss) {
   if (nEx) out.push('«' + REG_SHEET + '»: ' + nEx + ' прикладів з «ні» (планів не ставлять)');
   const debts = ss.getSheetByName(DEBTS_SHEET);
   if (debts && String(debts.getRange(3, 1).getValue()) === '') { debts.getRange(3, 1).setValue(DEBT_HINT).setFontColor('#1a73e8').setFontWeight('bold'); out.push('«' + DEBTS_SHEET + '»: як додати борг'); }
-  if (st && startHasModules_(ss)) {
-    const i = MODS.findIndex(m => m.id === 'service'), m = MODS[i], cell = st.getRange(MOD_FIRST + i, 1);
-    if (String(cell.getValue()) !== m.name) { cell.setValue(m.name); st.getRange(MOD_FIRST + i, 3).setValue(m.what); out.push('модуль «' + m.name + '» (був «🗂 Службові аркуші»)'); }
+  const b = modBlock_(ss);
+  if (b) {
+    const i = MODS.findIndex(m => m.id === 'service'), m = MODS[i], cell = b.sh.getRange(b.first + i, 1);
+    if (String(cell.getValue()) !== m.name) { cell.setValue(m.name); b.sh.getRange(b.first + i, 3).setValue(m.what); out.push('модуль «' + m.name + '» (був «🗂 Службові аркуші»)'); }
     if (!modBlockFull_(ss)) modBlockAdd_(ss);
   }
   try { sheetsReorder_(ss); } catch (e) { /* порядок вкладок не критичний */ }
   try { if (ss.setActiveSheet && st) ss.setActiveSheet(st); } catch (e) { /* активний аркуш не сховати */ }
   sheetsVisibility_(ss);
   try { startRefresh_(ss); } catch (e) { /* чекліст оновиться завтра */ }
-  return (out.length ? ['Оновлено: ' + out.join(', ') + '.'] : []).concat([modOn_('service') ? 'Усі аркуші видно (так вибрано на «' + START_SHEET + '»).'
-    : 'На виду: «' + VISIBLE_SHEETS.join('», «') + '». Решта працює схованою; показати: «' + START_SHEET + '», «' + modName_('service') + '»: так.']);
+  return (out.length ? ['Оновлено: ' + out.join(', ') + '.'] : []).concat([modOn_('service') ? 'Усі аркуші видно (модуль «' + modName_('service') + '» увімкнено).'
+    : 'На виду: «' + VISIBLE_SHEETS.join('», «') + '». Решта працює схованою; показати: модуль «' + modName_('service') + '» (' + MOD_WHERE + ').']);
 }
 
 /** Версія 11: блок «Мої правила» і новий знімок (розділи «Мої правила», «Де що в таблиці»), якщо радник увімкнений. */
@@ -200,25 +202,46 @@ function stepRules_(ss) {
   return out;
 }
 
+/**
+ * Версія 12: блок «🧩 Модулі» переїжджає зі «Старту» на «Налаштування» (рядки 42…) з вашими «так» / «ні»; перемикати: галочки
+ * в «🚀 Підключення», крок 5. «Старт»: лише кроки з номерами панелі. Модулі не змінюються.
+ */
+function stepStart12_(ss) {
+  const out = [], was = modRead_(ss);
+  if (!modBlock_(ss) || modBlock_(ss).old) { modBlockBuild_(ss, was); out.push('перемикачі модулів: ' + MOD_WHERE); }
+  const st = ss.getSheetByName(START_SHEET);
+  if (st && modOldOnStart_(ss)) {
+    const r = st.getRange(MOD_OLD_HEAD, 1, Math.min(MODS.length + 4, st.getMaxRows() - MOD_OLD_HEAD + 1), 4);
+    r.clearContent(); r.clearDataValidations(); r.setFontWeight('normal').setFontSize(10).setFontColor('#000000').setHorizontalAlignment('left');
+    out.push('«' + START_SHEET + '»: лише кроки, з номерами кроків панелі');
+  }
+  if (PropertiesService.getDocumentProperties().getProperty('prot') !== 'off' && modOn_('backup')) { try { applyProtection_(ss); } catch (e) { /* захист: наступного разу */ } }
+  try { modulesIfChanged_(ss); } catch (e) { /* застосує mbsTick */ }
+  try { startRefresh_(ss); } catch (e) { /* чекліст оновиться завтра */ }
+  return out.length ? ['Оновлено: ' + out.join('; ') + '. Увімкнені модулі не змінились.'] : ['Усе вже було.'];
+}
+
 /** Блок модулів має рядок для кожного модуля (нові модулі дописуються в кінець). */
 function modBlockFull_(ss) {
-  if (!startHasModules_(ss)) return false;
-  const v = ss.getSheetByName(START_SHEET).getRange(MOD_FIRST, 1, MODS.length, 1).getValues();
+  const b = modBlock_(ss);
+  if (!b) return false;
+  const v = b.sh.getRange(b.first, 1, MODS.length, 1).getValues();
   return MODS.every((m, i) => String(v[i][0]) === m.name);
 }
 
 /** Дописати порожні рядки нових модулів, не чіпаючи вже вибраних «так» / «ні». Інша назва в рядку: блок заново. */
 function modBlockAdd_(ss) {
-  const st = ensureSize_(ss.getSheetByName(START_SHEET), MOD_FIRST + MODS.length + 5, 4);
-  if (!startHasModules_(ss)) { startModulesBlock_(ss, st); return; }
-  const v = st.getRange(MOD_FIRST, 1, MODS.length, 1).getValues(), init = modInitial_(ss);
-  if (MODS.some((m, i) => String(v[i][0]) !== '' && String(v[i][0]) !== m.name)) { startModulesBlock_(ss, st); return; }
+  const b = modBlock_(ss);
+  if (!b) { modBlockBuild_(ss); return; }
+  const st = ensureSize_(b.sh, b.first + MODS.length + 5, 4), F = b.first;
+  const v = st.getRange(F, 1, MODS.length, 1).getValues(), init = modInitial_(ss);
+  if (MODS.some((m, i) => String(v[i][0]) !== '' && String(v[i][0]) !== m.name)) { modBlockBuild_(ss, modRead_(ss)); return; }
   MODS.forEach((m, i) => {
     if (String(v[i][0]) !== '') return;
-    st.getRange(MOD_FIRST + i, 1, 1, 3).setValues([[m.name, init[m.id] ? MOD_YES : MOD_NO, m.what]]);
-    st.getRange(MOD_FIRST + i, 2).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList([MOD_YES, MOD_NO]).setAllowInvalid(false).build())
+    st.getRange(F + i, 1, 1, 3).setValues([[m.name, init[m.id] ? MOD_YES : MOD_NO, m.what]]);
+    st.getRange(F + i, 2).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList([MOD_YES, MOD_NO]).setAllowInvalid(false).build())
       .setHorizontalAlignment('center').setFontWeight('bold');
-    st.getRange(MOD_FIRST + i, 3).setFontColor('#5f6368');
+    st.getRange(F + i, 3).setFontColor('#5f6368');
   });
 }
 
@@ -348,5 +371,5 @@ function tableStatus() {
     sec('✔️ Перевірка', cs.none ? ['аркуша немає'] : cs.bad.length ? ['⚠️ ' + cs.bad.length + ': ' + cs.bad.map(esc_).join('; ')] : ['усе OK (' + cs.ok + ')']),
     sec('💾 Копії', backupStatusLines_(ss)), sec('🏦 Імпорт з банку', bankStatusLines_(ss)), sec('📨 Telegram', tgStatusLines_(ss)),
     sec('📆 Календар платежів', calLines_(ss)), sec('🛡 Захист', [protectionOn_(ss) ? 'з попередженням ✓' : 'вимкнено']),
-    sec('🧩 Модулі', modLines_().concat(['Змінити: «' + START_SHEET + '», блок «🧩 Модулі».'])), sec('🤖 Радник Gemini', advisorLines_(ss))]);
+    sec('🧩 Модулі', modLines_().concat(['Змінити: ' + MOD_WHERE + '.'])), sec('🤖 Радник Gemini', advisorLines_(ss))]);
 }

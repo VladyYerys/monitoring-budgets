@@ -177,7 +177,7 @@ t('step 4 and finish: snapshot on Drive with the skill texts, module on; «Го�
   assert.strictEqual(c.cnDemo(false).demo, false);
   const f = c.cnFinish();
   assert.ok(env.docProps.getProperty('wiz_done') && f.need > 0);
-  assert.strictEqual(env.ss.getSheetByName('Старт').getRange('A6').getValue(), '✓');
+  assert.ok(env.ss.getSheetByName('Старт').getRange('A6:B20').getValues().some(r => r[0] === '✅ 5' && /Модулі/.test(r[1])), '«Готово»: крок 5 позначено');
 });
 
 t('QR: version grows with the text, finder patterns in three corners, quiet zone in the SVG', () => {

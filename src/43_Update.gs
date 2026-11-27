@@ -98,7 +98,7 @@ function migratePlan_() {
     { sheet: DEBTS_SHEET, ranges: [rows('A' + DEBT_FIRST, 'H' + DEBT_LAST)] },
     { sheet: REG_SHEET, ranges: [rows('A' + REG_FIRST, 'I' + REG_LAST)] },
     { sheet: DASH_SHEET, ranges: [rows(colStr_(DASH_LIMIT_COL) + (DASH_HOLE_HEAD + 1), colStr_(DASH_LIMIT_COL) + (DASH_HOLE_HEAD + CH_HOLES))] },
-    { sheet: START_SHEET, mods: true },
+    { sheet: SETTINGS_SHEET, mods: true },                               // модулі: блок на «Налаштуваннях» (у старих копіях ще на «Старті»)
     { sheet: HISTORY_SHEET, history: H_COLS.length },
     { sheet: H_CAT_SHEET, history: 6 },
   ];
@@ -139,15 +139,17 @@ function migrateCore_(src, dst) {
       return;
     }
     if (p.mods) {                                                       // модулі: за назвою (порядок між версіями може змінитись)
-      if (!startHasModules_(src)) { lines.push('«' + p.sheet + '»: модулів у старій копії ще не було, лишились як є'); return; }
-      const v = a.getRange(MOD_FIRST, 1, Math.min(MODS.length + 4, a.getMaxRows() - MOD_FIRST + 1), 2).getValues();
+      const sb = modBlock_(src);
+      if (!sb) { lines.push('Модулі: модулів у старій копії ще не було, лишились як є'); return; }
+      if (!modBlock_(dst) || modBlock_(dst).old) modBlockBuild_(dst);
+      const db = modBlock_(dst), v = sb.sh.getRange(sb.first, 1, Math.min(MODS.length + 4, sb.sh.getMaxRows() - sb.first + 1), 2).getValues();
       MODS.forEach((m, i) => {
         const row = v.find(x => String(x[0]) === m.name);
         if (!row) return;
-        b.getRange(MOD_FIRST + i, 2).setValue(String(row[1]).trim() === MOD_NO ? MOD_NO : MOD_YES);
+        db.sh.getRange(db.first + i, 2).setValue(String(row[1]).trim() === MOD_NO ? MOD_NO : MOD_YES);
         cells++;
       });
-      lines.push('«' + p.sheet + '»: модулів ' + cells);
+      lines.push('Модулі: перенесено ' + cells);
       total += cells;
       return;
     }
@@ -215,7 +217,7 @@ function migrateFromOld() {
   try { r = migrateCore_(src, ss); } catch (e) { show_(title, ['⚠️ ' + esc_(e.message)]); return; } finally { lock.releaseLock(); }
   const dp = PropertiesService.getDocumentProperties();
   dp.setProperties({ wiz_done: new Date().toISOString(), migrated_from: new Date().toISOString() });
-  dp.deleteProperty('mods');                                           // модулі: з перенесених клітинок «Старту»
+  dp.deleteProperty('mods');                                           // модулі: з перенесених клітинок блоку «🧩 Модулі»
   MODS_CACHE_ = null;
   let mods = [];
   try { mods = modulesApply_(ss, true).filter(l => l.indexOf('⚠️') >= 0); } catch (e) { mods = ['⚠️ Модулі: ' + esc_(e.message)]; }

@@ -37,7 +37,7 @@ function onOpen() {
       .addItem('🔄 Оновити знімок зараз', 'advisorSnapshotNow'))
     .addSeparator()
     .addItem('🩺 Стан таблиці', 'tableStatus')
-    .addItem('🧩 Модулі: застосувати', 'modulesNow')
+    .addItem('🧩 Модулі', 'modulesNow')
     .addItem('✓ Оновити чекліст «Старту»', 'startNow')
     .addSubMenu(ui.createMenu('🛠 Оновлення таблиці')
       .addItem('🔎 Чи вийшла нова версія шаблону', 'versionNow')
@@ -54,9 +54,9 @@ function setupTemplate() {
   let r;
   try { r = schemaRun_(ss, { allowEmpty: true }); } catch (e) { show_('🚀 Шаблон', ['⚠️ ' + esc_(e.message)]); return; }
   try { const j = ss.getSheetByName(JOURNAL); if (j && ss.setActiveSheet) ss.setActiveSheet(j); } catch (e) { /* ignore */ }
-  show_('🚀 Шаблон готовий', r.lines.concat(['Далі: «🚀 Підключення» (картка, Telegram, регулярні, Gemini); потім пишіть у «' + JOURNAL + '», а дивіться на «' +
-    DASH_SHEET + '» і «' + MOB_SHEET + '». «' + SETTINGS_SHEET + '», «' + CP_SHEET + '» та інші аркуші працюють схованими: показати їх можна на «' + START_SHEET +
-    '», «' + modName_('service') + '»: так.']));
+  show_('🚀 Шаблон готовий', r.lines.concat(['Далі: «🚀 Підключення» (картка, Telegram, регулярні, Gemini, модулі); потім пишіть у «' + JOURNAL + '», а дивіться на «' +
+    DASH_SHEET + '» і «' + MOB_SHEET + '». «' + SETTINGS_SHEET + '», «' + CP_SHEET + '» та інші аркуші працюють схованими: показати їх можна модулем «' +
+    modName_('service') + '» (' + MOD_WHERE + ').']));
 }
 
 /** При відкритті: одна підказка, якщо оновлення зупинилось або чекає. */

@@ -13,7 +13,7 @@ const CAL_TAG = 'mbs';
 const CAL_REMIND = [6660, 900];                       // хвилин до початку дня: за 5 днів о 09:00 і напередодні о 09:00
 const CAL_BACK_DAYS = 45, CAL_AHEAD_DAYS = 400, CAL_RETRY_MS = 3600 * 1000;
 
-/** Модуль «📆 Календар платежів» увімкнено (на «Старті»). */
+/** Модуль «📆 Календар платежів» увімкнено («🚀 Підключення», крок 5). */
 function calOn_() { return modOn_('cal'); }
 
 /** Лише календар, який створив сам шаблон (id збережено). Чужий календар з такою ж назвою не береться. */
@@ -129,7 +129,7 @@ function calendarOff() {
 function calLines_(ss) {
   const dp = PropertiesService.getDocumentProperties(), tz = ss.getSpreadsheetTimeZone(), st = jsonProp_(dp, 'cal_stat'), err = jsonProp_(dp, 'cal_err');
   const fmt = t => Utilities.formatDate(new Date(Number(t)), tz, 'dd.MM HH:mm');
-  if (!calOn_()) return ['Вимкнено. Увімкнути: «' + START_SHEET + '», модуль «📆 Календар платежів» → так.'];
+  if (!calOn_()) return ['Вимкнено. Увімкнути: модуль «📆 Календар платежів», ' + MOD_WHERE + '.'];
   const out = ['Увімкнено: «' + esc_(CAL_NAME) + '»' + (st ? ', оновлено ' + fmt(st.t) + ': ' + calStatText_(st) : '') + '.'];
   if (err) out.push('⚠️ Помилка ' + fmt(err.t) + ': ' + esc_(err.msg));
   return out;

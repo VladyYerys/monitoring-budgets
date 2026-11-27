@@ -26,7 +26,7 @@ function protectList_() {
     { sheet: HISTORY_SHEET, allow: [] },
     { sheet: H_CAT_SHEET, allow: [] },
     { sheet: BANK_SHEET, allow: [] },
-    { sheet: START_SHEET, allow: ['B' + MOD_FIRST + ':B' + (MOD_FIRST + MODS.length - 1)] },
+    { sheet: START_SHEET, allow: [] },                                     // кроки пише скрипт; модулі: «🚀 Підключення», крок 5
     { sheet: REG_SHEET, allow: ['A' + REG_FIRST + ':I' + REG_LAST] },
     { sheet: CH_SHEET, allow: [] },
     { sheet: DASH_SHEET, allow: [colStr_(DASH_LIMIT_COL) + (DASH_HOLE_HEAD + 1) + ':' + colStr_(DASH_LIMIT_COL) + (DASH_HOLE_HEAD + CH_HOLES)] },
@@ -156,7 +156,7 @@ function copiesOf_(files, base, kind) {
 function backupStatusLines_(ss) {
   const p = PropertiesService.getDocumentProperties().getProperties(), tz = ss.getSpreadsheetTimeZone();
   const fmt = iso => iso ? Utilities.formatDate(new Date(iso), tz, 'dd.MM.yyyy HH:mm') : 'ще не було';
-  const lines = ['Нічні копії: ' + (!modOn_('backup') ? '<b>модуль вимкнено</b> на «' + START_SHEET + '»' : hasTrigger_(TRG.backup) ? '<b>увімкнено</b> (щодня ' + pad2_(BACKUP_HOUR) + ':00…' + pad2_(BACKUP_HOUR + 1) + ':00)' : '<b>вимкнено</b>'),
+  const lines = ['Нічні копії: ' + (!modOn_('backup') ? '<b>модуль вимкнено</b> (' + MOD_WHERE + ')' : hasTrigger_(TRG.backup) ? '<b>увімкнено</b> (щодня ' + pad2_(BACKUP_HOUR) + ':00…' + pad2_(BACKUP_HOUR + 1) + ':00)' : '<b>вимкнено</b>'),
     'Остання успішна копія: <b>' + fmt(p.backup_last_ok) + '</b>'];
   if (p.backup_folder_id) {
     try {

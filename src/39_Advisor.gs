@@ -148,7 +148,7 @@ function advMapLines_(ss) {
     '- «' + SETTINGS_SHEET + '»: B5 з якого числа дохід іде в наступний місяць, B6 орієнтир погашення ліміту, рядки 27–32 «Мої правила».'];
   if (modOn_('debts')) out.push('- «' + DEBTS_SHEET + '»: борг чи розстрочка рядком: назва, напрям, сума, платіж на місяць, день.');
   if (modOn_('fop')) out.push('- «' + FOP_SHEET + '»: група, ставки, ліміти, дохід ФОП і податки.');
-  out.push('- Аркуші «' + DICT_SHEET + '», «' + SETTINGS_SHEET + '» та інші службові сховані: показати можна на «' + START_SHEET + '», модуль «' + modName_('service') + '»: так.', '');
+  out.push('- Аркуші «' + DICT_SHEET + '», «' + SETTINGS_SHEET + '» та інші службові сховані: показати можна модулем «' + modName_('service') + '» (' + MOD_WHERE + ').', '');
   return out;
 }
 
@@ -361,7 +361,7 @@ function advisorIfDue_(ss) {
 
 function advisorLines_(ss) {
   const dp = PropertiesService.getDocumentProperties(), tz = ss.getSpreadsheetTimeZone(), err = jsonProp_(dp, 'adv_err'), t = dp.getProperty('adv_t');
-  if (!modOn_('advisor')) return ['Модуль вимкнено (на «' + START_SHEET + '»).'];
+  if (!modOn_('advisor')) return ['Модуль вимкнено (' + MOD_WHERE + ').'];
   const out = [t ? 'Знімок оновлено ' + Utilities.formatDate(new Date(Number(t)), tz, 'dd.MM HH:mm') + ' (' + (dp.getProperty('adv_chars') || '?') + ' знаків), рівень: ' + esc_(advLevel_(ss)) + '.'
     : 'Знімка ще немає: з\'явиться сам після 05:00 або «🤖 Радник Gemini → 🔄 Оновити знімок зараз».'];
   if (err) out.push('⚠️ Помилка ' + Utilities.formatDate(new Date(Number(err.t)), tz, 'dd.MM HH:mm') + ': ' + esc_(err.msg));
@@ -385,7 +385,7 @@ function advisorNow() {
   const ss = SpreadsheetApp.getActive(), doc = advDoc_(ss, false), r = advRules_(ss), url = doc ? doc.getUrl() : '';
   const area = (id, t, hgt) => '<textarea id="' + id + '" readonly style="width:100%;height:' + hgt + 'px;font:12px/1.4 monospace" onclick="this.select()">' + esc_(t) + '</textarea>';
   const lines = [
-    modOn_('advisor') ? '' : '⚠️ Модуль «🤖 Радник Gemini» вимкнено: увімкніть на «' + START_SHEET + '» або натисніть «🔄 Оновити знімок зараз».',
+    modOn_('advisor') ? '' : '⚠️ Модуль «🤖 Радник Gemini» вимкнено: увімкніть (' + MOD_WHERE + ') або натисніть «🔄 Оновити знімок зараз».',
     doc ? 'Знімок: ' + link_(url, ADV_DOC) + ' (на вашому Диску, оновлюється щодня). У тексті для Gemini пряме посилання на нього: Gemini відкриє знімок одразу, без пошуку.'
       : 'Знімка ще немає: «🤖 Радник Gemini → 🔄 Оновити знімок зараз», тоді в тексті для Gemini буде пряме посилання на нього (без знімка Gemini шукатиме документ за назвою).',
     advSkillRelink_() ? '⚠️ Знімок на Диску створено заново: скопіюйте текст ще раз, щоб у навичці було нове посилання.' : '',

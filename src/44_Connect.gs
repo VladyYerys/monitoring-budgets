@@ -1,4 +1,4 @@
-/** 44_Connect.gs: «🚀 Підключення»: бічна панель з чотирма кроками замість анкети: картка, Telegram, регулярні, Gemini. */
+/** 44_Connect.gs: «🚀 Підключення»: бічна панель з п'ятьма кроками замість анкети: картка, Telegram, регулярні, Gemini, модулі. */
 
 /*
  * Панель (HTML у 45_ConnectUi.gs) викликає функції cn… через google.script.run. Кожна спершу перевіряє таблицю
@@ -12,18 +12,19 @@
  *   3. 🔁 Регулярні: пошук повторюваних платежів і надходжень в операціях (журнал; з Mono ще й виписка за 2 місяці
  *      без запису в журнал) → галочки → аркуш «Регулярні». Свій платіж: форма.
  *   4. 🤖 Gemini: «Мої правила», знімок на Диску й одне повідомлення для чату Gemini (Gemini сам створює навичку); запасний шлях: поля навички й SKILL.md.
+ *   5. 🧩 Модулі: галочки (блок «🧩 Модулі» на «Налаштуваннях»), застосовуються одразу; меню «🧩 Модулі» відкриває панель на цьому кроці.
  * Токени, як і раніше, лише в UserProperties вашого акаунта; у панель вони назад не повертаються.
- * Режим «я сам / сім'я» і учасники: перемикач угорі панелі. Модулі вмикаються самі за підключеним (змінити: «Старт»).
+ * Режим «я сам / сім'я» і учасники: перемикач угорі панелі. Модулі вмикаються самі за підключеним (змінити: крок 5).
  */
 
 const CN_TITLE = '🚀 Підключення';
 const CN_BOTFATHER = 'https://t.me/BotFather', CN_TG = 'https://t.me/', CN_MONO = 'https://api.monobank.ua/', CN_GEMINI = 'https://gemini.google.com/';
 const CN_SCAN_DAYS = 124, CN_MONO_DAYS = 62;
 
-/** Модуль так / ні через клітинку «Старту»: тоді modulesApply_ побачить зміну й застосує її (аркуші, рядки, розклади). */
+/** Модуль так / ні через клітинку блоку «🧩 Модулі»: тоді modulesApply_ побачить зміну й застосує її (аркуші, рядки, розклади). */
 function cnMod_(ss, id, on) {
-  const i = MODS.findIndex(m => m.id === id);
-  if (i >= 0 && startHasModules_(ss)) ss.getSheetByName(START_SHEET).getRange(MOD_FIRST + i, 2).setValue(on ? MOD_YES : MOD_NO);
+  const i = MODS.findIndex(m => m.id === id), b = modBlock_(ss);
+  if (i >= 0 && b) b.sh.getRange(b.first + i, 2).setValue(on ? MOD_YES : MOD_NO);
   else modSet_(ss, id, on);
 }
 
@@ -35,11 +36,14 @@ function cnSs_() {
 }
 
 /** Меню «🚀 Підключення» (і «🚀 Почати» в порожній таблиці): добудувати таблицю, якщо треба, і відкрити панель. */
-function startWizard() {
+function startWizard() { cnOpen_(0); }
+
+/** Відкрити панель; step: одразу на цьому кроці (5: «Модулі»), 0: на першому незробленому. */
+function cnOpen_(step) {
   const ss = SpreadsheetApp.getActive();
   try { guard_(ss, true); } catch (e) { show_(CN_TITLE, ['⚠️ ' + esc_(e.message)]); return; }
   try { schemaRun_(ss, { allowEmpty: true }); } catch (e) { show_(CN_TITLE, ['⚠️ ' + esc_(e.message)]); return; }
-  SpreadsheetApp.getUi().showSidebar(HtmlService.createHtmlOutput(cnHtml_()).setTitle(CN_TITLE));
+  SpreadsheetApp.getUi().showSidebar(HtmlService.createHtmlOutput(cnHtml_(step)).setTitle(CN_TITLE));
 }
 
 /* ---------- стан для панелі ---------- */
@@ -66,6 +70,7 @@ function cnState() {
     cats: cnCats_(ss),
     adv: { on: modOn_('advisor'), doc: doc ? doc.getUrl() : '', t: dp.getProperty('adv_t') || '', rules: advRules_(ss), prio: ADV_PRIO, max: ADV_RULES_MAX,
       v: ADV_SKILL.v, copied: Number(dp.getProperty('adv_skill_v') || 0), old: advSkillOld_(), relink: advSkillRelink_(), fop: modOn_('fop'), credit: modOn_('credit') },
+    mods: MODS.map(m => ({ id: m.id, name: m.name, what: m.what, on: modOn_(m.id) })), modsSeen: !!dp.getProperty('mods_seen'),
     demo: !!jsonProp_(dp, 'demo'), empty: !readJournal_(ss).some(o => !o.blank), done: !!dp.getProperty('wiz_done'),
     links: { mono: CN_MONO, botfather: CN_BOTFATHER, gemini: CN_GEMINI },
   };
@@ -337,6 +342,28 @@ function cnAdvisor(rules) {
   const r = snapshotWrite_(ss);
   return { doc: r.url, docName: ADV_DOC, chars: r.chars, msg: advSkillMsg_(r.url), title: ADV_SKILL.title, description: ADV_SKILL.description, instructions: advSkillInstructions_(r.url),
     starters: ADV_SKILL.starters, gemini: CN_GEMINI, skillFile: REPO_URL + '/blob/main/gemini/' + ADV_SKILL.name + '/SKILL.md', v: ADV_SKILL.v, rules: advRules_(ss) };
+}
+
+/* ---------- 5. модулі ---------- */
+
+/** Галочка модуля в панелі: «так» / «ні» в блок і одразу застосувати (аркуші, рядки, розклади). → { lines, s } */
+function cnModule(id, on) {
+  const ss = cnSs_();
+  if (!MODS.some(m => m.id === id)) throw new Error('Невідомий модуль: ' + id);
+  cnMod_(ss, id, !!on);
+  PropertiesService.getDocumentProperties().setProperty('mods_seen', '1');
+  const lines = modulesApply_(ss, false);
+  try { startRefresh_(ss); } catch (e) { /* чекліст оновиться завтра */ }
+  return { lines: lines, s: cnState() };
+}
+
+/** «Застосувати всі ще раз»: якщо аркуші чи розклади розійшлися з галочками. */
+function cnModsApply() {
+  const ss = cnSs_();
+  PropertiesService.getDocumentProperties().setProperty('mods_seen', '1');
+  const lines = modulesApply_(ss, true);
+  try { startRefresh_(ss); } catch (e) { /* чекліст оновиться завтра */ }
+  return { lines: lines, s: cnState() };
 }
 
 /* ---------- кінець і демо ---------- */

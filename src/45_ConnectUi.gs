@@ -6,7 +6,8 @@
  * Зовнішні адреси лише як посилання для людини (api.monobank.ua, t.me, gemini.google.com): панель їх не завантажує.
  */
 
-function cnHtml_() {
+/** step: відкрити одразу на цьому кроці (5: «Модулі» з меню «🧩 Модулі»), 0: на першому незробленому. */
+function cnHtml_(step) {
   return String.raw`<!DOCTYPE html><html><head><base target="_blank"><meta charset="utf-8"><style>
 body{font:13px/1.45 Arial,sans-serif;color:#202124;margin:0;padding:10px 12px 40px}
 a{color:#1a73e8}button{font:13px Arial,sans-serif;padding:5px 10px;border:1px solid #dadce0;border-radius:4px;background:#fff;cursor:pointer;margin:2px 4px 2px 0}
@@ -22,6 +23,7 @@ ol.how{padding-left:18px;margin:6px 0}.qr{text-align:center;margin:6px 0}.c{text
 .item{border:1px solid #e8eaed;border-radius:6px;padding:6px 8px;margin:4px 0}.item .sub{color:#5f6368;font-size:12px;margin-top:2px}
 .ok{color:#188038}.warn{color:#b06000}.msg{margin:8px 0;min-height:18px}.foot{border-top:1px solid #e8eaed;padding-top:8px;margin-top:8px}
 details{margin:8px 0}summary{cursor:pointer;color:#5f6368}
+.mod{display:flex;gap:8px;align-items:flex-start;margin:6px 0;cursor:pointer}.mod input{margin-top:3px}.mod .hint{margin:0}
 </style></head><body>
 <div class="mode"><label><input type="radio" name="mode" id="m0" onchange="setMode(false)"> Я сам</label>
 <label><input type="radio" name="mode" id="m1" onchange="showFam(true)"> Сім'я</label></div>
@@ -83,6 +85,12 @@ details{margin:8px 0}summary{cursor:pointer;color:#5f6368}
 <button class="pri" onclick="adv()">Зберегти й зробити текст для Gemini</button>
 <div id="advres"></div></div></div>
 
+<div class="step" id="s5"><div class="sh" onclick="toggle(5)"><span class="n">5</span>Модулі<span class="st" id="st5"></span></div><div class="sb">
+<p class="hint">Галочка: модуль працює. Без галочки ховає свої аркуші, рядки й повідомлення; дані не видаляються. Застосовується одразу.</p>
+<div id="mods"></div>
+<p class="hint"><a href="#" onclick="modsAll();return false">Застосувати всі ще раз</a>, якщо аркуші чи розклади розійшлися з галочками.</p>
+<div id="modres"></div></div></div>
+
 <div id="msg" class="msg"></div>
 <div class="foot"><button class="pri" onclick="finish()">Готово</button><button id="demoBtn" onclick="demo()">Демо-місяць</button></div>
 <details><summary>Інше</summary>
@@ -90,10 +98,10 @@ details{margin:8px 0}summary{cursor:pointer;color:#5f6368}
 <button onclick="call('disconnectPrivat')">Відключити ПриватБанк</button><button onclick="call('disconnectTelegram')">Відключити Telegram</button>
 <button onclick="call('calendarOff')">Календар: видалити</button><button onclick="call('protectionOnMenu')">Захист: увімкнути</button>
 <button onclick="call('removeProtection')">Захист: прибрати</button>
-<p class="hint">Модулі (так / ні): аркуш «Старт». Ця панель: меню «🚀 Підключення».</p></details>
+<p class="hint">Модулі: крок 5 (меню «🧩 Модулі»). Ця панель: меню «🚀 Підключення».</p></details>
 
 <script>
-  var S = null, monoToken = '', poll = null, polls = 0, polling = false, sug = [], tg = null, grp = false;
+  var GO = /*GO*/0, S = null, monoToken = '', poll = null, polls = 0, polling = false, sug = [], tg = null, grp = false;
   function el(id) { return document.getElementById(id); }
   function h(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   function money(x) { return Math.round(Number(x) || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' ₴'; }
@@ -106,7 +114,7 @@ details{margin:8px 0}summary{cursor:pointer;color:#5f6368}
   }
   function call(fn) { run(fn, [], function () { load(); }); }
   function toggle(n) { var s = el('s' + n); s.className = s.className.indexOf('open') >= 0 ? s.className.replace(' open', '') : s.className + ' open'; }
-  function go(n) { [1, 2, 3, 4].forEach(function (k) { var s = el('s' + k); s.className = s.className.replace(' open', '') + (k === n ? ' open' : ''); }); el('s' + n).scrollIntoView(); }
+  function go(n) { [1, 2, 3, 4, 5].forEach(function (k) { var s = el('s' + k); s.className = s.className.replace(' open', '') + (k === n ? ' open' : ''); }); el('s' + n).scrollIntoView(); }
   function showFam(on) { el('fam').className = on ? '' : 'hide'; }
   function setMode(fam) { run('cnMode', [fam, el('members').value], render); }
 
@@ -114,14 +122,19 @@ details{margin:8px 0}summary{cursor:pointer;color:#5f6368}
     S = s;
     el('m0').checked = !s.family; el('m1').checked = s.family; showFam(s.family); el('members').value = s.members.join(', ');
     el('monoLink').href = s.links.mono; el('bfLink').href = s.links.botfather; el('bfqr').innerHTML = s.qrBotFather;
-    var b = s.bank, done = [b.accounts.length > 0, s.tg.connected, s.reg.items.length > 0, s.adv.on && !!s.adv.doc];
+    var b = s.bank, done = [b.accounts.length > 0, s.tg.connected, s.reg.items.length > 0, s.adv.on && !!s.adv.doc, s.modsSeen || s.done];
     el('st1').innerHTML = b.accounts.length ? h(b.accounts.map(function (a) { return a.name; }).join(', ')) : 'не підключено';
     el('st2').innerHTML = s.tg.connected ? '@' + h(s.tg.bot) + (s.tg.on ? '' : ' (модуль вимкнено)') : s.tg.bot ? 'чекає Start' : 'не підключено';
     el('st3').innerHTML = s.reg.items.length ? s.reg.items.length + ' на аркуші' : 'ще немає';
     el('st4').innerHTML = !done[3] ? 'не підключено' : s.adv.old ? '<span class="warn">нова навичка: скопіюйте ще раз</span>' :
       s.adv.relink ? '<span class="warn">новий знімок: скопіюйте ще раз</span>' : s.adv.copied ? 'навичка v' + s.adv.copied : 'знімок є';
     advFill(s.adv);
-    [1, 2, 3, 4].forEach(function (k) { var e = el('s' + k), open = e.className.indexOf('open') >= 0; e.className = 'step' + (done[k - 1] ? ' done' : '') + (open ? ' open' : ''); });
+    var nOn = s.mods.filter(function (m) { return m.on; }).length;
+    el('st5').innerHTML = 'увімкнено ' + nOn + ' з ' + s.mods.length;
+    el('mods').innerHTML = s.mods.map(function (m) {
+      return '<label class="mod"><input type="checkbox"' + (m.on ? ' checked' : '') + ' onchange="mod(\'' + h(m.id) + '\', this.checked)"><span><b>' + h(m.name) +
+        '</b><br><span class="hint">' + h(m.what) + '</span></span></label>'; }).join('');
+    [1, 2, 3, 4, 5].forEach(function (k) { var e = el('s' + k), open = e.className.indexOf('open') >= 0; e.className = 'step' + (done[k - 1] ? ' done' : '') + (open ? ' open' : ''); });
     el('card').value = b.credit ? '1' : '0'; el('bday').value = b.bday; el('sched').checked = b.schedule;
     el('sched').disabled = !(b.mono.length || b.privat.length);
     el('fopq').className = b.fopAcc ? '' : 'hide';
@@ -138,7 +151,8 @@ details{margin:8px 0}summary{cursor:pointer;color:#5f6368}
         (r.state ? '<br>' + h(r.state) : '') + '</div></div>'; }).join('') : '';
     el('demoBtn').textContent = s.demo ? 'Прибрати демо' : 'Демо-місяць';
     el('demoBtn').style.display = s.demo || s.empty ? '' : 'none';
-    if (!document.querySelector('.step.open')) { var first = done.indexOf(false); if (first >= 0 && !s.done) go(first + 1); }
+    if (GO) { go(GO); GO = 0; }
+    else if (!document.querySelector('.step.open')) { var first = done.indexOf(false); if (first >= 0 && !s.done) go(first + 1); }
   }
   function load() { run('cnState', [], render, ' '); }
 
@@ -280,12 +294,15 @@ details{margin:8px 0}summary{cursor:pointer;color:#5f6368}
     try { navigator.clipboard.writeText(t.value).then(ok, fb); } catch (e) { fb(); }
   }
   function demo() { run('cnDemo', [!S.demo], render, S.demo ? '⏳ Прибираю демо…' : '⏳ Додаю демо-місяць…'); }
+  function modShow(r) { el('modres').innerHTML = '<p class="hint">' + r.lines.join('<br>') + '</p>'; render(r.s); }
+  function mod(id, on) { run('cnModule', [id, on], modShow, '⏳ Застосовую…'); }
+  function modsAll() { run('cnModsApply', [], modShow, '⏳ Застосовую всі модулі…'); }
   function finish() {
     run('cnFinish', [], function (r) {
       note('<span class="ok">✓ Готово. Чекліст «Старту»: ' + r.done + ' з ' + r.need + '.</span>' + (r.warnings.length ? '<br>' + h(r.warnings.join(' ')) : '') +
-        ' Модулі: аркуш «Старт». <a href="#" onclick="google.script.host.close();return false">Закрити</a>');
+        ' Модулі: крок 5. <a href="#" onclick="google.script.host.close();return false">Закрити</a>');
     });
   }
   load();
-</script></body></html>`;
+</script></body></html>`.replace('/*GO*/0', String(Number(step) || 0));
 }

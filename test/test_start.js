@@ -35,16 +35,22 @@ t('«🚀 Підключення» in an empty table: builds, opens the side pan
   assert.ok(rows.some(o => o.d.indexOf('[Регулярний] [демо] Комуналка: ') === 0 && o.e === '🔁 план регулярний'), 'демо-правила «Регулярних» стали планами');
   assert.ok(rows.some(o => o.g === 'Олена') && rows.some(o => o.g === 'спільне'), 'у сім\'ї демо розкладене за «Хто»');
   const st = env.ss.getSheetByName('Старт');
-  assert.strictEqual(st.getRange('A6').getValue(), '✓', '«Готово» натиснуто');
-  const mod = name => st.getRange('A26:B34').getValues().find(r => r[0] === name)[1];
+  const steps = st.getRange('A6:C20').getValues().filter(r => r[0]);
+  assert.ok(steps.some(r => r[0] === '✅ 5' && /Модулі/.test(r[1])), '«Готово» натиснуто: модулі переглянуто');
+  assert.ok(steps.some(r => r[0] === '✅ ·' && /Учасники сім'ї/.test(r[1])) && steps.some(r => r[0] === '✅ 1' && /ФОП/.test(r[1])), JSON.stringify(steps));
+  assert.ok(steps.every(r => /^(✅|⬜) (\d|·)$/.test(r[0])), 'галочка й номер кроку панелі в одній клітинці');
+  assert.ok(!steps.some(r => /Календар|Борги/.test(r[1])), 'вимкнені модулі на «Старті» не показуються');
+  const mod = name => env.ss.getSheetByName('Налаштування').getRange('A44:B52').getValues().find(r => r[0] === name)[1];
   assert.strictEqual(mod('💳 Кредитний ліміт і грейс'), 'ні', 'дебетова картка: без ліміту');
   assert.strictEqual(mod('🧾 ФОП'), 'так'); assert.strictEqual(mod('🤝 Борги й розстрочки'), 'ні'); assert.strictEqual(mod('💾 Копії й захист'), 'так');
   assert.ok(env.ss.getSheetByName('ФОП') && env.ss.getSheetByName('ФОП').isSheetHidden(), 'ФОП є: аркуш є, схований разом з рештою');
   assert.strictEqual(env.ss.getSheetByName('Борги').isSheetHidden(), true, 'борги вимкнено: аркуш сховано');
   assert.strictEqual(JSON.parse(env.docProps.getProperty('mods')).credit, false);
   assert.ok(env.docProps.getProperty('fop_day'), 'модуль ФОП застосовано: плани податків синхронізовано');
-  assert.ok(/^Готово: \d+ з \d+/.test(st.getRange('A3').getValue()));
-  assert.ok(['B19', 'B20', 'B21', 'B22', 'B23'].some(a => /HYPERLINK\("https:\/\/send\.monobank\.ua\/jar\//.test(st.getRange(a).getFormula())), 'посилання «Підтримати» під чеклістом');
+  assert.ok(/^▰+▱*  \d+ з \d+/.test(st.getRange('A3').getValue()), st.getRange('A3').getValue());
+  const foot = 6 + steps.length + 1;
+  assert.ok(/HYPERLINK\("https:\/\/send\.monobank\.ua\/jar\//.test(st.getRange('A' + foot).getFormula()), 'посилання «Підтримати» під кроками');
+  assert.ok(st.getRange('A1:C40').getValues().every(r => r.join('').indexOf('Увімкнено') < 0), 'блоку модулів на «Старті» немає');
 });
 
 t('demo clear: only «[демо]» rows, its checkpoint, category plans and the start date go back; your row stays', () => {

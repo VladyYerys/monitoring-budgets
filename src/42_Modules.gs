@@ -1,4 +1,4 @@
-/** 42_Modules.gs: Модулі-перемикачі на «Старті»: кожен вмикається й вимикається окремо («так» / «ні»). */
+/** 42_Modules.gs: Модулі-перемикачі: кожен вмикається й вимикається окремо. Перемикати: «🚀 Підключення», крок 5 (меню «🧩 Модулі»). */
 
 /*
  * Вимкнений модуль ховає свої аркуші, рядки «Головного» й повідомлення та знімає свої розклади. Дані не видаляються:
@@ -6,12 +6,17 @@
  * «🗂 Усі аркуші» (типово «ні»): на виду лише «Старт», «Журнал», «Регулярні», «Charts» і «charts_mob» (VISIBLE_SHEETS);
  * «Місяці», «Дні», «Довідник», «Налаштування», «ФОП», «Борги» і службові працюють схованими. «так» показує їх
  * («ФОП» і «Борги» лише з увімкненими модулями).
- * Застосовується одразу після правки на «Старті» (розклад mbsEdit), а ще кожні 15 хв (якщо правку пропущено),
- * з меню «🧩 Модулі: застосувати» і з панелі «🚀 Підключення».
- * Клітинки на «Старті»: джерело правди; властивість документа mods: їх копія, щоб розклади читали швидко.
+ * Перемикачі: галочки в панелі «🚀 Підключення», крок 5. Вони пишуть «так» / «ні» в блок «🧩 Модулі» на «Налаштуваннях»
+ * (рядки 42…; до версії 12 блок був на «Старті») і одразу застосовують. Правка блоку вручну теж працює (розклад mbsEdit,
+ * а ще кожні 15 хв, якщо правку пропущено). Клітинки блоку: джерело правди (переносяться «📦 Перенести дані»);
+ * властивість документа mods: їх копія, щоб розклади читали швидко.
  */
 
-const MOD_HEAD = 24, MOD_FIRST = 26;
+const MOD_TITLE = '🧩 Модулі';
+const MOD_HEAD = 42, MOD_FIRST = 44;                                     // «Налаштування» (з версії 12)
+const MOD_OLD_HEAD = 24, MOD_OLD_FIRST = 26;                             // «Старт» (до версії 12)
+const MOD_WHERE = '«🚀 Підключення», крок 5 (меню «🧩 Модулі»)';           // де перемикати: для підказок
+
 const MOD_YES = 'так', MOD_NO = 'ні';
 const MODS = [
   { id: 'tg', name: '📨 Telegram', what: 'ранковий підсумок, тижневий і місячний звіти, тривоги', def: true },
@@ -54,28 +59,39 @@ function modInitial_(ss) {
   return o;
 }
 
-/** Блок «🧩 Модулі» на «Старті». Значення: з mods або початкові. */
-function startModulesBlock_(ss, sh) {
-  const st = modInitial_(ss);
-  sh.getRange(MOD_HEAD, 1, 1, 3).setValues([['🧩 Модулі', '', 'так / ні: вимкнений модуль ховає свої аркуші, рядки й повідомлення; дані не видаляються.']]);
+/** Де блок «🧩 Модулі»: { sh, first, old } («Налаштування»; old: ще на «Старті», до версії 12) або null. */
+function modBlock_(ss) {
+  const at = (name, head, first) => {
+    const sh = ss.getSheetByName(name);
+    return sh && sh.getMaxRows() >= first + MODS.length - 1 && String(sh.getRange(head, 1).getValue()) === MOD_TITLE ? { sh: sh, first: first, old: name === START_SHEET } : null;
+  };
+  return at(SETTINGS_SHEET, MOD_HEAD, MOD_FIRST) || at(START_SHEET, MOD_OLD_HEAD, MOD_OLD_FIRST);
+}
+function startHasModules_(ss) { return !!modBlock_(ss); }
+/** Старий блок ще стоїть на «Старті». */
+function modOldOnStart_(ss) {
+  const sh = ss.getSheetByName(START_SHEET);
+  return !!sh && sh.getMaxRows() >= MOD_OLD_HEAD && String(sh.getRange(MOD_OLD_HEAD, 1).getValue()) === MOD_TITLE;
+}
+
+/** Блок «🧩 Модулі» на «Налаштуваннях». Значення: want ({ id: true/false }), інакше з mods або початкові. */
+function modBlockBuild_(ss, want) {
+  const sh = ensureSize_(ss.getSheetByName(SETTINGS_SHEET), MOD_FIRST + MODS.length + 5, 4), st = want || modInitial_(ss);
+  sh.getRange(MOD_HEAD, 1, 1, 3).setValues([[MOD_TITLE, '', 'так / ні. Зручніше галочками: «🚀 Підключення», крок 5. Вимкнений модуль ховає свої аркуші, рядки й повідомлення; дані не видаляються.']]);
   sh.getRange(MOD_HEAD, 1).setFontWeight('bold').setFontSize(12);
   sh.getRange(MOD_HEAD, 3).setFontColor('#5f6368');
   sh.getRange(MOD_HEAD + 1, 1, 1, 3).setValues([['Модуль', 'Увімкнено', 'Що робить']]).setFontWeight('bold');
-  sh.getRange(MOD_FIRST, 1, MODS.length, 3).setValues(MODS.map(m => [m.name, st[m.id] ? MOD_YES : MOD_NO, m.what]));
+  sh.getRange(MOD_FIRST, 1, MODS.length, 3).setValues(MODS.map(m => [m.name, (Object.prototype.hasOwnProperty.call(st, m.id) ? st[m.id] : m.def) ? MOD_YES : MOD_NO, m.what]));
   sh.getRange(MOD_FIRST, 2, MODS.length, 1).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList([MOD_YES, MOD_NO]).setAllowInvalid(false).build())
     .setHorizontalAlignment('center').setFontWeight('bold');
   sh.getRange(MOD_FIRST, 3, MODS.length, 1).setFontColor('#5f6368');
 }
 
-function startHasModules_(ss) {
-  const sh = ss.getSheetByName(START_SHEET);
-  return !!sh && sh.getMaxRows() >= MOD_FIRST + MODS.length - 1 && String(sh.getRange(MOD_HEAD, 1).getValue()) === '🧩 Модулі';
-}
-
-/** Що стоїть у клітинках «Старту»: { id: true/false } або null (блоку немає). */
+/** Що стоїть у клітинках блоку: { id: true/false } або null (блоку немає). */
 function modRead_(ss) {
-  if (!startHasModules_(ss)) return null;
-  const v = ss.getSheetByName(START_SHEET).getRange(MOD_FIRST, 1, MODS.length, 2).getValues(), o = {};
+  const b = modBlock_(ss);
+  if (!b) return null;
+  const v = b.sh.getRange(b.first, 1, MODS.length, 2).getValues(), o = {};
   MODS.forEach((m, i) => { const x = String(v[i][1]).trim().toLowerCase(); o[m.id] = x === '' ? m.def : x !== MOD_NO; });
   return o;
 }
@@ -84,7 +100,8 @@ function modRead_(ss) {
 function modSet_(ss, id, on) {
   const i = MODS.findIndex(m => m.id === id);
   if (i < 0) return;
-  if (startHasModules_(ss)) ss.getSheetByName(START_SHEET).getRange(MOD_FIRST + i, 2).setValue(on ? MOD_YES : MOD_NO);
+  const b = modBlock_(ss);
+  if (b) b.sh.getRange(b.first + i, 2).setValue(on ? MOD_YES : MOD_NO);
   const dp = PropertiesService.getDocumentProperties(), st = jsonProp_(dp, 'mods') || modInitial_(ss);
   st[id] = !!on;
   dp.setProperty('mods', JSON.stringify(st));
@@ -179,7 +196,7 @@ const MOD_APPLY = {
  */
 function modulesApply_(ss, force) {
   const want = modRead_(ss);
-  if (!want) return ['Блоку «🧩 Модулі» на «' + START_SHEET + '» ще немає: «🛠 Оновлення таблиці → ⬆️ Оновити зараз».'];
+  if (!want) return ['Блоку «' + MOD_TITLE + '» ще немає: «🛠 Оновлення таблиці → ⬆️ Оновити зараз».'];
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(20 * 1000)) return ['⚠️ Скрипт зайнятий іншою дією; модулі застосуються самі за 15 хв.'];
   const dp = PropertiesService.getDocumentProperties(), was = jsonProp_(dp, 'mods') || {}, out = [];
@@ -206,10 +223,10 @@ function modulesIfChanged_(ss) {
   return modulesApply_(ss, false);
 }
 
-/** Чи правка зачепила клітинки модулів на «Старті». */
+/** Чи правка зачепила клітинки модулів («Налаштування»; у старих таблицях ще «Старт»). */
 function isModulesEdit_(range) {
-  return range.getSheet().getName() === START_SHEET && range.getColumn() <= 2 && range.getLastColumn() >= 2 &&
-    range.getLastRow() >= MOD_FIRST && range.getRow() <= MOD_FIRST + MODS.length - 1;
+  const name = range.getSheet().getName(), first = name === SETTINGS_SHEET ? MOD_FIRST : name === START_SHEET ? MOD_OLD_FIRST : 0;
+  return first > 0 && range.getColumn() <= 2 && range.getLastColumn() >= 2 && range.getLastRow() >= first && range.getRow() <= first + MODS.length - 1;
 }
 
 function modLines_() {
@@ -218,10 +235,5 @@ function modLines_() {
 
 /* ---------- меню ---------- */
 
-function modulesNow() {
-  if (!menuOk_('🧩 Модулі')) return;
-  const ss = SpreadsheetApp.getActive();
-  if (!startHasModules_(ss)) { try { schemaRun_(ss); } catch (e) { show_('🧩 Модулі', ['⚠️ ' + esc_(e.message)]); return; } }
-  const lines = modulesApply_(ss, true);
-  show_('🧩 Модулі', lines.concat(['Змінити: аркуш «' + START_SHEET + '», блок «🧩 Модулі» (так / ні); застосовується саме.']));
-}
+/** Меню «🧩 Модулі»: панель «🚀 Підключення» одразу на кроці 5 (галочки). */
+function modulesNow() { cnOpen_(5); }

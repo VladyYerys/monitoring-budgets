@@ -54,7 +54,7 @@ t('sync: plans added as «🔁 план регулярний» with the tag and 
   const s2 = c.debtsPlansSync_(env.ss);
   assert.ok(s2.updated >= 1 && s2.added === 0, JSON.stringify(s2));
   assert.ok(plans().filter(o => o.d.indexOf('[Борг] Розстрочка') === 0).every(o => o.b === 3000));
-  const st = env.ss.getSheetByName('Старт'), r = 26 + vm.runInContext('MODS', c).findIndex(m => m.id === 'debts');
+  const st = env.ss.getSheetByName('Налаштування'), r = 44 + vm.runInContext('MODS', c).findIndex(m => m.id === 'debts');
   st.getRange(r, 2).setValue('ні');
   c.mbsEdit({ range: st.getRange(r, 2) });
   assert.strictEqual(plans().length, 0, 'модуль вимкнено: майбутні плани прибрано');

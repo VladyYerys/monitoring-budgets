@@ -133,7 +133,7 @@ t('move data refuses: the personal table (sheets «m» and «y»), a non-templat
 t('move data from an older copy (no «Борги», no modules, no new settings rows): skipped with a note, defaults of the new copy kept', () => {
   const old = oldCopy();
   old.ss.deleteSheet(old.ss.getSheetByName('Борги'));
-  old.ss.getSheetByName('Старт').getRange('A24:C33').clearContent();
+  old.ss.getSheetByName('Налаштування').getRange('A42:C52').clearContent();
   old.ss.getSheetByName('Налаштування').getRange('A10:B10').clearContent();
   old.ss.getSheetByName('Налаштування').getRange('A22:B24').clearContent();
   const env = built({ promptText: OLD_ID }), c = env.ctx;

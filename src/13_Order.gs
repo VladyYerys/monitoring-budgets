@@ -57,7 +57,7 @@ function ensureTickTriggers_(ss) {
   if (!hasTrigger_(TRG.edit)) ScriptApp.newTrigger(TRG.edit).forSpreadsheet(ss).onEdit().create();
 }
 
-/** Правка в журналі (A…H): упорядкувати за хвилину. Правка модулів на «Старті»: застосувати одразу. */
+/** Правка в журналі (A…H): упорядкувати за хвилину. Правка блоку «🧩 Модулі» («Налаштування»): застосувати одразу. */
 function mbsEdit(e) {
   if (!e || !e.range || !quietOk_()) return;
   if (isModulesEdit_(e.range)) { try { modulesIfChanged_(e.range.getSheet().getParent()); } catch (x) { /* застосує mbsTick */ } return; }

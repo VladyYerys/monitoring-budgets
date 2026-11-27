@@ -63,8 +63,8 @@ t('modules: credit off → «Можна на день» instead of grace; budget
   assert.ok(/Грейс: строк/.test(F(env, 'I1')) && /LARGE/.test(F(env, 'C1')));
   assert.strictEqual(JSON.stringify(j.getRange('A5:H6').getValues()), before, 'дані журналу не змінились');
   assert.strictEqual(j.cf.filter(r => r.spec.ranges.every(g => g.getLastRow() <= 3)).length, 7, 'правила шапки не дублюються');
-  // через перемикач на «Старті»
-  const st = env.ss.getSheetByName('Старт'), r = 26 + K(c, 'MODS').findIndex(m => m.id === 'credit');
+  // через перемикач (блок «🧩 Модулі» на «Налаштуваннях»)
+  const st = env.ss.getSheetByName('Налаштування'), r = 44 + K(c, 'MODS').findIndex(m => m.id === 'credit');
   st.getRange(r, 2).setValue('ні'); c.mbsEdit({ range: st.getRange(r, 2) });
   assert.strictEqual(V(env, 'I1'), 'Можна на день');
 });

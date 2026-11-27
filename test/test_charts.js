@@ -13,7 +13,7 @@ function setup() {
 }
 const st = env => env.ss.getSheetByName('Старт');
 function toggle(env, id, v) {
-  const r = st(env).getRange(26 + K(env.ctx, 'MODS').findIndex(m => m.id === id), 2);
+  const r = env.ss.getSheetByName('Налаштування').getRange(44 + K(env.ctx, 'MODS').findIndex(m => m.id === id), 2);
   r.setValue(v);
   env.ctx.mbsEdit({ range: r });
 }
@@ -146,12 +146,12 @@ t('module «🗂 Усі аркуші»: off by default (only Старт, Жур�
   assert.strictEqual(env.ss.getSheetByName('ФОП').isSheetHidden(), false, 'ФОП: модуль увімкнено');
   assert.strictEqual(env.ss.getSheetByName('Борги').isSheetHidden(), true, 'Борги: модуль вимкнено');
   assert.strictEqual(env.ss.getSheetByName('Дані графіків').isSheetHidden(), true);
-  assert.ok(env.ss.getSheetByName('Старт').getRange('A6:C25').getValues().every(r => !/сховано/.test(r[2])), 'підказка «сховано» зникла');
+  assert.ok(env.ss.getSheetByName('Старт').getRange('A6:C25').getValues().every(r => !/видно з модулем/.test(r[2])), 'підказка «видно з модулем» зникла');
   toggle(env, 'service', 'ні');
   assert.ok(hidden().every(Boolean));
   same(shown(), VISIBLE);
   env.ctx.startRefresh_(env.ss);
-  assert.ok(env.ss.getSheetByName('Старт').getRange('A6:C25').getValues().some(r => /сховано/.test(r[2])), 'де шукати сховане');
+  assert.ok(env.ss.getSheetByName('Старт').getRange('A6:C25').getValues().some(r => /видно з модулем «🗂 Усі аркуші», крок 5/.test(r[2])), 'де шукати сховане');
 });
 
 t('upgrade of a version-8 table to 9: backup first, «Charts» and «charts_mob» built, old chart data rebuilt, «📱 Телефон» removed, old charts off «Головне» (yours kept)', () => {
@@ -182,24 +182,24 @@ t('upgrade of a version-8 table to 9: backup first, «Charts» and «charts_mob�
 });
 
 t('upgrade of a version-9 table to 10: module «🗂 Службові аркуші» becomes «🗂 Усі аркуші» with your choice kept; Місяці, Дні, Довідник, Налаштування hidden; order Старт, Журнал, Регулярні, Charts, charts_mob', () => {
-  const env = setup(), c = env.ctx, ss = env.ss, i = K(c, 'MODS').findIndex(m => m.id === 'service'), row = 26 + i;
-  st(env).getRange(row, 1).setValue('🗂 Службові аркуші');
+  const env = setup(), c = env.ctx, ss = env.ss, i = K(c, 'MODS').findIndex(m => m.id === 'service'), row = 44 + i;
+  env.ss.getSheetByName('Налаштування').getRange(row, 1).setValue('🗂 Службові аркуші');
   ['Місяці', 'Дні', 'Довідник', 'Налаштування'].forEach(n => ss.getSheetByName(n).showSheet());
   env.docProps.setProperty('schema_v', '9');
   assert.strictEqual(c.schemaTick_(ss), true);
   assert.strictEqual(env.docProps.getProperty('schema_v'), String(c.schemaLast_()));
-  assert.strictEqual(st(env).getRange(row, 1).getValue(), '🗂 Усі аркуші');
-  assert.strictEqual(st(env).getRange(row, 2).getValue(), 'ні', 'ваш вибір лишився');
-  assert.ok(/Довідник/.test(st(env).getRange(row, 3).getValue()));
+  assert.strictEqual(env.ss.getSheetByName('Налаштування').getRange(row, 1).getValue(), '🗂 Усі аркуші');
+  assert.strictEqual(env.ss.getSheetByName('Налаштування').getRange(row, 2).getValue(), 'ні', 'ваш вибір лишився');
+  assert.ok(/Довідник/.test(env.ss.getSheetByName('Налаштування').getRange(row, 3).getValue()));
   same(ss.getSheets().filter(s => !s.isSheetHidden()).map(s => s.getName()), VISIBLE);
   same(ss.getSheets().map(s => s.getName()).slice(0, 5), VISIBLE);
   // «так» на старій таблиці: усе видно й після кроку
-  const env2 = setup(), r2 = 26 + K(env2.ctx, 'MODS').findIndex(m => m.id === 'service');
+  const env2 = setup(), r2 = 44 + K(env2.ctx, 'MODS').findIndex(m => m.id === 'service');
   toggle(env2, 'service', 'так');
-  st(env2).getRange(r2, 1).setValue('🗂 Службові аркуші');
+  env2.ss.getSheetByName('Налаштування').getRange(r2, 1).setValue('🗂 Службові аркуші');
   env2.docProps.setProperty('schema_v', '9');
   env2.ctx.schemaTick_(env2.ss);
-  assert.strictEqual(st(env2).getRange(r2, 2).getValue(), 'так');
+  assert.strictEqual(env2.ss.getSheetByName('Налаштування').getRange(r2, 2).getValue(), 'так');
   assert.ok(SERVICE.every(n => !env2.ss.getSheetByName(n).isSheetHidden()));
 });
 

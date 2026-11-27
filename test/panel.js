@@ -14,8 +14,8 @@ function panelSetup(env, o) {
   if (o.bday) c.cnBday(o.bday);
   (o.fop || []).forEach(f => c.cnFop(f[1], f[0]));
   if (o.mods) {
-    const MODS = vm.runInContext('MODS', c), st = env.ss.getSheetByName('Старт');
-    MODS.forEach((m, i) => st.getRange(26 + i, 2).setValue(o.mods.indexOf(m.id) >= 0 ? 'так' : 'ні'));
+    const MODS = vm.runInContext('MODS', c), st = env.ss.getSheetByName('Налаштування');
+    MODS.forEach((m, i) => st.getRange(44 + i, 2).setValue(o.mods.indexOf(m.id) >= 0 ? 'так' : 'ні'));
     c.modulesApply_(env.ss, true);
   }
   if (o.demo) c.cnDemo(true);
