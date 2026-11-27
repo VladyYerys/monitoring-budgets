@@ -1,8 +1,9 @@
 /** 38_Start.gs: аркуш «⚡ Швидке підключення»: стан таблиці й покрокова інструкція для ШІ (Gemini чи іншого); демо-місяць. */
 
 /*
- * Перша вкладка. Людина відкриває ШІ з доступом до таблиці (Gemini справа вгорі в Таблицях) і пише:
- * «Прочитай аркуш «⚡ Швидке підключення» і налаштуй зі мною таблицю». Далі ШІ веде сам за цим аркушем:
+ * Перша вкладка. На виду лише рядки 1–5 (для людини): що відкрити, що написати ШІ, панель без ШІ, «Готово x з 6».
+ * Усе з рядка 6 і нижче: згорнута група рядків (для ШІ; людина може розгорнути «+» зліва). Людина відкриває ШІ з доступом до таблиці
+ * (Gemini справа вгорі в Таблицях) і пише: «Прочитай аркуш «⚡ Швидке підключення» і налаштуй зі мною таблицю». Далі ШІ веде сам:
  *   1. СТАН: що вже підключено (пише скрипт: раз на день, після «Готово» в панелі, галочок модулів і з меню);
  *   2. ЯК ВЕСТИ ЛЮДИНУ: що за чим; банк, Telegram, модулі й радника робить людина в панелі «🚀 Підключення»
  *      (меню, дозволи Google, токени: ШІ цього не може і не повинен);
@@ -11,13 +12,15 @@
  *   5. НЕ МОЖНА: формули, службові аркуші, токени, сортування, «✅ факт» без прохання;
  *   6. ГОТОВІ ЗАПИТИ для людини.
  * У «Журнал» ШІ пише лише на пряме прохання людини, у рядок для вводу, колонки A–E (G для сім'ї).
- * До версії 15 аркуш звався «Старт» (кроки з галочками).
+ * До версії 15 аркуш звався «Старт» (кроки з галочками). Вигляд аркуша (QUICK_LAYOUT) змінився: перемальовується сам при першому оновленні.
  * Демо-місяць: вигадані операції з позначкою «[демо]» у коментарі, щоб одразу побачити «Charts» і «charts_mob»; «🧹 Очистити демо» прибирає все.
  */
 
 const START_OLD = 'Старт';                                               // назва аркуша до версії 15
 const QUICK_TITLE = '⚡ Швидке підключення';
-const START_FIRST = 7, START_ROWS = 110;                                 // стан з рядка 7; усе разом: до 110 рядків
+const START_FIRST = 8, START_ROWS = 110;                                 // стан з рядка 8; усе разом: до 110 рядків
+const QUICK_FOLD = 6;                                                    // з цього рядка й нижче: згорнута група для ШІ
+const QUICK_LAYOUT = '2';                                                // вигляд аркуша: 2 = п'ять рядків на виду, решта згорнута
 const DEMO_TAG = '[демо] ';
 const P_STEP = 'крок ';
 
@@ -110,22 +113,46 @@ function quickGuide_() {
   ];
 }
 
-/** Оновити «⚡ Швидке підключення»: стан і інструкція. → { done, need } */
+/** Рядки 2–5 (на виду): для людини, коротко. */
+function quickTop_(st) {
+  return [
+    ['1. Відкрийте Gemini у цій таблиці (зірочка справа вгорі) чи інший ШІ.'],
+    ['2. Напишіть йому: «Прочитай аркуш «' + QUICK_TITLE + '» і налаштуй зі мною таблицю».'],
+    ['Без ШІ: меню «📊 ' + APP_NAME + ' → 🚀 Підключення». Токени й номери карток лише там, ніколи в чат.'],
+    ['Готово основного: ' + st.done + ' з ' + st.need + '. Нижче згорнуто інструкцію для ШІ, вам читати не треба (розгорнути: «+» зліва).'],
+  ];
+}
+
+/** Рядки з QUICK_FOLD до last: одна згорнута група (повторний виклик не додає другу). Без групи аркуш просто довший. */
+function quickFold_(sh, last) {
+  try {
+    sh.setRowGroupControlPosition(SpreadsheetApp.GroupControlTogglePosition.BEFORE);   // «+» на рядку 5, біля «Готово»
+    let g = sh.getRowGroupDepth(QUICK_FOLD) > 0 ? sh.getRowGroup(QUICK_FOLD, 1) : null;
+    if (g && sh.getRowGroupDepth(last) === 0) { g.remove(); g = null; }                   // група коротша, ніж треба: заново
+    if (!g) { sh.getRange(QUICK_FOLD, 1, last - QUICK_FOLD + 1, 1).shiftRowGroupDepth(1); g = sh.getRowGroup(QUICK_FOLD, 1); }
+    g.collapse();
+    return true;
+  } catch (e) { return false; }
+}
+
+/** Оновити «⚡ Швидке підключення»: 5 рядків для людини, під ними згорнуто стан і інструкцію для ШІ. → { done, need } */
 function startRefresh_(ss) {
   const sh = ss.getSheetByName(START_SHEET);
   if (!sh) return null;
-  const st = quickState_(ss), guide = quickGuide_(), tz = ss.getSpreadsheetTimeZone();
+  const st = quickState_(ss), guide = quickGuide_(), tz = ss.getSpreadsheetTimeZone(), dp = PropertiesService.getDocumentProperties();
   ensureSize_(sh, START_ROWS + 5, 3);
   const lim = modOldOnStart_(ss) ? MOD_OLD_HEAD - 1 : START_ROWS;         // старий блок модулів (до версії 12) не чіпаємо
   const all = sh.getRange(1, 1, lim, 3);
   all.clearContent();
   all.setFontWeight('normal').setFontColor('#000000').setFontSize(10).setWrap(true).setBackground(null);
   sh.getRange(1, 1).setValue(QUICK_TITLE).setFontWeight('bold').setFontSize(14);
-  sh.getRange(2, 1).setValue('З ШІ: відкрийте Gemini в цій таблиці (зірочка справа вгорі) чи інший ШІ з доступом до неї й напишіть: «Прочитай аркуш «' + QUICK_TITLE +
-    '» і налаштуй зі мною таблицю». Без ШІ: меню «📊 ' + APP_NAME + ' → 🚀 Підключення» на комп\'ютері.').setWrap(false);
-  sh.getRange(3, 1).setValue('Токени банку й бота, номери карток і IBAN: лише в панелі «🚀 Підключення», ніколи в чат ШІ чи в клітинки.').setFontColor('#5f6368').setWrap(false);
-  sh.getRange(5, 1).setValue('# 1. СТАН (оновлює скрипт; ШІ читає звідси). Готово основного: ' + st.done + ' з ' + st.need).setFontWeight('bold').setWrap(false);
-  sh.getRange(6, 1, 1, 3).setValues([['Що', 'Стан', 'Хто й де']]).setFontWeight('bold');
+  setF_(sh.getRange(1, 3), [['=HYPERLINK("' + SUPPORT_URL + '","❤️ Підтримати автора")']]);
+  sh.getRange(2, 1, 4, 1).setValues(quickTop_(st)).setWrap(false).setFontSize(11);
+  sh.getRange(3, 1).setFontWeight('bold');
+  sh.getRange(4, 1, 2, 1).setFontColor('#5f6368');
+  // нижче: для ШІ (згорнуто)
+  sh.getRange(QUICK_FOLD, 1).setValue('# 1. СТАН (оновлює скрипт; ШІ читає звідси). Готово основного: ' + st.done + ' з ' + st.need).setFontWeight('bold').setWrap(false);
+  sh.getRange(QUICK_FOLD + 1, 1, 1, 3).setValues([['Що', 'Стан', 'Хто й де']]).setFontWeight('bold');
   sh.getRange(START_FIRST, 1, st.rows.length, 3).setValues(st.rows);
   let r = START_FIRST + st.rows.length + 1;
   const g = guide.map(x => [x[0], x[1] || '', x[2] || '']);
@@ -133,17 +160,19 @@ function startRefresh_(ss) {
     sh.getRange(r, 1, g.length, 3).setValues(g);
     g.forEach((x, i) => { if (String(x[0]).indexOf('# ') === 0) sh.getRange(r + i, 1, 1, 3).setFontWeight('bold').setBackground('#f1f3f4'); });
     r += g.length + 1;
-    setF_(sh.getRange(r, 1), [['=HYPERLINK("' + SUPPORT_URL + '","❤️ Підтримати автора")']]);
-    sh.getRange(r, 2).setValue('Шаблон безкоштовний, код відкритий: github.com/VladyYerys/monitoring-budgets').setFontColor('#5f6368');
+    sh.getRange(r, 1).setValue('Шаблон безкоштовний, код відкритий: github.com/VladyYerys/monitoring-budgets').setFontColor('#5f6368').setWrap(false);
   }
+  quickFold_(sh, lim);
   try { sh.setColumnWidth(1, 300); sh.setColumnWidth(2, 520); sh.setColumnWidth(3, 300); } catch (e) { /* ignore */ }
-  PropertiesService.getDocumentProperties().setProperty('start_day', todayKey_(ss));
+  dp.setProperty('start_day', todayKey_(ss));
+  dp.setProperty('start_layout', QUICK_LAYOUT);
   return { done: st.done, need: st.need, tz: tz };
 }
 
-/** З mbsTick: раз на день. */
+/** З mbsTick: раз на день; одразу, якщо аркуш ще старого вигляду (QUICK_LAYOUT). */
 function startIfDue_(ss) {
-  if (!ss.getSheetByName(START_SHEET) || PropertiesService.getDocumentProperties().getProperty('start_day') === todayKey_(ss)) return null;
+  const dp = PropertiesService.getDocumentProperties();
+  if (!ss.getSheetByName(START_SHEET) || (dp.getProperty('start_day') === todayKey_(ss) && dp.getProperty('start_layout') === QUICK_LAYOUT)) return null;
   return startRefresh_(ss);
 }
 

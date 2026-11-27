@@ -36,7 +36,7 @@ t('«🚀 Підключення» in an empty table: builds, opens the side pan
   assert.ok(rows.some(o => o.d.indexOf('[Регулярний] [демо] Комуналка: ') === 0 && o.e === '🔁 план регулярний'), 'демо-правила «Регулярних» стали планами');
   assert.ok(rows.some(o => o.g === 'Олена') && rows.some(o => o.g === 'спільне'), 'у сім\'ї демо розкладене за «Хто»');
   const st = env.ss.getSheetByName('⚡ Швидке підключення');
-  const state = st.getRange('A7:C21').getValues().filter(r => r[0]), val = k => (state.find(r => r[0] === k) || [])[1];
+  const state = st.getRange('A8:C22').getValues().filter(r => r[0]), val = k => (state.find(r => r[0] === k) || [])[1];
   assert.ok(/^сім'я: Олена, Іван/.test(val('Режим')), JSON.stringify(state));
   assert.strictEqual(val('Банк'), 'не підключено');
   assert.ok(/ФОП/.test(val('ФОП')) || /1 ФОП/.test(val('ФОП')), val('ФОП'));
@@ -51,7 +51,7 @@ t('«🚀 Підключення» in an empty table: builds, opens the side pan
   assert.ok(env.docProps.getProperty('fop_day'), 'модуль ФОП застосовано: плани податків синхронізовано');
   assert.ok(/основного: \d+ з 6/.test(st.getRange('A5').getValue()), st.getRange('A5').getValue());
   const all = st.getRange('A1:C110').getValues();
-  assert.ok(all.some((r, i) => /HYPERLINK\("https:\/\/send\.monobank\.ua\/jar\//.test(st.getRange('A' + (i + 1)).getFormula())), 'посилання «Підтримати» внизу');
+  assert.ok(/HYPERLINK\("https:\/\/send\.monobank\.ua\/jar\//.test(st.getRange('C1').getFormula()), 'посилання «Підтримати» біля назви');
   assert.ok(all.every(r => String(r[1]) !== 'Увімкнено'), 'блоку модулів немає');
 });
 
@@ -155,7 +155,7 @@ t('«⚡ Швидке підключення»: first and visible; state for the
     '«Регулярні», перший порожній рядок з 5-го: A назва, B категорія', '«Довідник»: рядок категорії (колонка A), колонка F', 'B27 пріоритет',
     'Колонки з I і далі не чіпати', 'Не видаляй і не сортуй рядки', '«Доступно моїх сьогодні»', 'щомісяця / щокварталу / щороку']
     .forEach(x => assert.ok(txt.indexOf(x) >= 0, x + '\n' + txt.slice(0, 1500)));
-  const state = st.getRange('A7:A21').getValues().map(r => r[0]);
+  const state = st.getRange('A8:A22').getValues().map(r => r[0]);
   ['Режим', 'Банк', 'Імпорт з банку щодня', 'Telegram-бот', 'Регулярні платежі й доходи', 'Бюджети категорій на місяць', 'Мої правила для радника', 'Модулі увімкнено', 'Операції в журналі']
     .forEach(k => assert.ok(state.indexOf(k) >= 0, k));
   assert.ok(txt.indexOf('—') < 0, 'без довгих тире');
@@ -166,6 +166,39 @@ t('«⚡ Швидке підключення»: first and visible; state for the
   assert.ok(t2.indexOf('uSecret') < 0);
   c.startNow();
   assert.ok(/Готово основного: \d+ з 6/.test(env.calls.dialogs.pop().html.replace(/<[^>]+>/g, '')));
+});
+
+t('«⚡ Швидке підключення»: five short lines on view (what to open, what to write, the panel, «Готово x з 6»); everything for the AI below is one folded row group; a refresh keeps one group; an old-layout sheet is redrawn the same day', () => {
+  const env = makeEnv(), c = env.ctx, Q = '⚡ Швидке підключення';
+  env.ss.insertSheet('Аркуш1'); c.setupTemplate();
+  const st = env.ss.getSheetByName(Q), top = st.getRange('A1:A5').getValues().map(r => String(r[0]));
+  assert.strictEqual(top[0], Q);
+  assert.ok(/Gemini/.test(top[1]) && /зірочка справа вгорі/.test(top[1]), top[1]);
+  assert.ok(top[2].indexOf('«Прочитай аркуш «' + Q + '» і налаштуй зі мною таблицю»') >= 0, top[2]);
+  assert.ok(/🚀 Підключення/.test(top[3]) && /ніколи в чат/.test(top[3]), top[3]);
+  assert.ok(/^Готово основного: \d+ з 6\. Нижче згорнуто інструкцію для ШІ/.test(top[4]), top[4]);
+  assert.ok(top.every(x => x.length <= 120), 'рядки короткі');
+  assert.ok(/HYPERLINK\(.*Підтримати автора/.test(st.getRange('C1').getFormula()), 'підтримка біля назви');
+  // з рядка 6: одна згорнута група до кінця; «+» на рядку 5
+  assert.strictEqual(st.getRowGroupDepth(5), 0);
+  assert.strictEqual(st.getRowGroupDepth(6), 1); assert.strictEqual(st.getRowGroupDepth(110), 1);
+  assert.strictEqual(st.getRowGroup(6, 1).isCollapsed(), true);
+  assert.strictEqual(st.groupCtl, 'BEFORE');
+  assert.ok(/^# 1\. СТАН/.test(st.getRange('A6').getValue()), 'стан у згорнутому');
+  // людина розгорнула; оновлення: група та сама (не друга), знову згорнута
+  st.getRowGroup(6, 1).expand();
+  c.startRefresh_(env.ss);
+  assert.strictEqual(st.groups.length, 1); assert.strictEqual(st.getRowGroupDepth(6), 1);
+  assert.strictEqual(st.getRowGroup(6, 1).isCollapsed(), true);
+  // аркуш старого вигляду (версія 0.5.0, уже оновлений сьогодні): перемальовується одразу, не завтра
+  st.groups = []; st.getRange('A2').setValue('З ШІ: відкрийте Gemini…');
+  env.docProps.deleteProperty('start_layout');
+  assert.ok(c.startIfDue_(env.ss), 'старий вигляд: оновити зараз');
+  assert.strictEqual(st.getRowGroupDepth(6), 1);
+  assert.ok(/^1\. Відкрийте Gemini/.test(st.getRange('A2').getValue()));
+  assert.strictEqual(c.startIfDue_(env.ss), null, 'новий вигляд і вже сьогодні: нічого');
+  const txt = st.getRange('A1:C110').getValues().map(r => r.join(' ')).join(' ');
+  assert.ok(txt.indexOf('—') < 0, 'без довгих тире');
 });
 
 t('upgrade of a version-14 table to 15: «Старт» becomes «⚡ Швидке підключення» (first, visible), old content replaced; a second «Старт» is kept hidden as «Старт (старий)»', () => {

@@ -91,6 +91,16 @@ function makeEnv(opts = {}) {
   S.hideRows = function (r, n) { this.hiddenRows = (this.hiddenRows || []).concat([[r, n || 1]]); };
   S.showRows = function (r, n) { const k = n || 1; this.hiddenRows = (this.hiddenRows || []).filter(h => h[0] + h[1] <= r || h[0] >= r + k); };
   S.isRowHiddenByUser = function (r) { return (this.hiddenRows || []).some(h => r >= h[0] && r < h[0] + h[1]); };
+  // групи рядків, як у Таблицях: { r, n, collapsed }; глибина рядка: скільки груп його містять; немає групи: getRowGroup падає
+  S.getRowGroupDepth = function (row) { return (this.groups || []).filter(g => row >= g.r && row < g.r + g.n).length; };
+  S.getRowGroup = function (row, depth) {
+    const g = (this.groups || []).filter(x => row >= x.r && row < x.r + x.n)[depth - 1];
+    if (!g) throw new Error('No group at row ' + row + ', depth ' + depth);
+    const sh = this;
+    return { collapse() { g.collapsed = true; return this; }, expand() { g.collapsed = false; return this; }, isCollapsed: () => !!g.collapsed,
+      remove() { sh.groups = sh.groups.filter(x => x !== g); }, getRange: () => sh.getRange(g.r, 1, g.n, sh.maxC), getDepth: () => depth };
+  };
+  S.setRowGroupControlPosition = function (p) { this.groupCtl = p; return this; };
   S.setTabColor = function (c) { this.tab = c; return this; };
   S.getMaxColumns = function () { return this.maxC; };
   S.clear = function () { this.cells = new Map(); this.dv = new Map(); return this; };
@@ -126,6 +136,12 @@ function makeEnv(opts = {}) {
   const R = Range.prototype;
   R.grid = function (fn) { const o = []; for (let i = 0; i < this.nr; i++) { const row = []; for (let j = 0; j < this.nc; j++) row.push(fn(this.r + i, this.c + j)); o.push(row); } return o; };
   R.getValues = function () { return this.grid((r, c) => this.sh.cell(r, c).v); };
+  R.shiftRowGroupDepth = function (d) {
+    const sh = this.sh; sh.groups = sh.groups || [];
+    if (d > 0) for (let i = 0; i < d; i++) sh.groups.push({ r: this.r, n: this.nr, collapsed: false });
+    else for (let i = 0; i < -d; i++) { const k = sh.groups.findIndex(g => g.r === this.r && g.n === this.nr); if (k >= 0) sh.groups.splice(k, 1); }
+    return this;
+  };
   R.getValue = function () { return this.sh.cell(this.r, this.c).v; };
   R.getDisplayValue = function () { const v = this.getValue(); return v instanceof Date ? v.toISOString() : String(v); };
   R.getFormulas = function () { return this.grid((r, c) => this.sh.cell(r, c).f); };
@@ -375,7 +391,8 @@ function makeEnv(opts = {}) {
     SpreadsheetApp: { getActive: () => ss, flush: () => {}, openById: id => { if (!others[id]) throw new Error('no spreadsheet ' + id); calls.opened = (calls.opened || []).concat([id]); return others[id]; }, getUi: () => { if (opts.noUi) throw new Error('no ui'); return ui; },
       ProtectionType: { SHEET: 'SHEET', RANGE: 'RANGE' }, newDataValidation: () => new DVB(), newConditionalFormatRule: () => new CFB(),
       DataValidationCriteria: { VALUE_IN_LIST: 'VALUE_IN_LIST', VALUE_IN_RANGE: 'VALUE_IN_RANGE' },
-      CopyPasteType: { PASTE_FORMAT: 'PASTE_FORMAT', PASTE_DATA_VALIDATION: 'PASTE_DATA_VALIDATION' } },
+      CopyPasteType: { PASTE_FORMAT: 'PASTE_FORMAT', PASTE_DATA_VALIDATION: 'PASTE_DATA_VALIDATION' },
+      GroupControlTogglePosition: { BEFORE: 'BEFORE', AFTER: 'AFTER' } },
     HtmlService: { createHtmlOutput: html => ({ html, setWidth() { return this; }, setHeight() { return this; }, setTitle(t) { this.title = t; return this; } }) },
     DriveApp, DocumentApp, ScriptApp, UrlFetchApp, Utilities, CalendarApp, Session: { getScriptTimeZone: () => scriptTz },
     PropertiesService: { getDocumentProperties: () => docProps, getUserProperties: () => userProps },

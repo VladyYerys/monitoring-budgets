@@ -150,7 +150,7 @@ t('module «🗂 Усі аркуші»: off by default (only ⚡ Швидке п
   assert.ok(hidden().every(Boolean));
   same(shown(), VISIBLE);
   env.ctx.startRefresh_(env.ss);
-  assert.ok(env.ss.getSheetByName('⚡ Швидке підключення').getRange('A7:C21').getValues().some(r => r[0] === 'Модулі увімкнено' && !/Усі аркуші/.test(r[1])), 'стан: «Усі аркуші» вимкнено');
+  assert.ok(env.ss.getSheetByName('⚡ Швидке підключення').getRange('A8:C22').getValues().some(r => r[0] === 'Модулі увімкнено' && !/Усі аркуші/.test(r[1])), 'стан: «Усі аркуші» вимкнено');
 });
 
 t('upgrade of a version-8 table to 9: backup first, «Charts» and «charts_mob» built, old chart data rebuilt, «📱 Телефон» removed, old charts off «Головне» (yours kept)', () => {

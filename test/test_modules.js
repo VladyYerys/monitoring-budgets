@@ -233,7 +233,7 @@ t('panel step 5: a checkbox switches a module at once (sheets, rows, schedules),
   const a = c.cnModsApply();
   assert.ok(a.lines.length >= 9, 'усі модулі заново');
   assert.throws(() => c.cnModule('nope', true), /Невідомий модуль/);
-  const start = env.ss.getSheetByName('⚡ Швидке підключення').getRange('A7:C21').getValues();
+  const start = env.ss.getSheetByName('⚡ Швидке підключення').getRange('A8:C22').getValues();
   assert.ok(start.some(x => x[0] === 'Модулі увімкнено' && /Борги й розстрочки/.test(x[1])), 'стан: модулі');
 });
 
