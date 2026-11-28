@@ -519,6 +519,7 @@ function importBank_(ss) {
     });
     if (errs.length === jobs.length) throw new Error(errs.join('; '));
     rep.errors = errs;
+    try { rep.recat = draftsRecat_(ss); } catch (e) { rep.recat = 0; }             // старі чернетки, для яких тепер є правило
     rep.sorted = sortCore_(ss);
     const bankSh = ss.getSheetByName(BANK_SHEET), stamp = new Date();
     bankSh.getRange('B2').setValue(stamp);
@@ -696,7 +697,7 @@ function upsertCheckpoints_(ss, cps) {
 
 function importSummary_(r) {
   return 'нових операцій ' + r.drafts + (r.transfers ? ' (переказів ' + r.transfers + ')' : '') + (r.uncategorized ? ', без категорії ' + r.uncategorized : '') +
-    (r.facts ? ' · одразу «✅ факт» ' + r.facts : '') + (r.plans ? ' · закрито планів ' + r.plans : '') + (r.pairs ? ' · між своїми ' + r.pairs : '') + (r.learned ? ' · за історією ' + r.learned : '') + (r.refunds ? ' · повернень ' + r.refunds : '') + (r.parts ? ' · частинами ' + r.parts : '') +
+    (r.facts ? ' · одразу «✅ факт» ' + r.facts : '') + (r.plans ? ' · закрито планів ' + r.plans : '') + (r.pairs ? ' · між своїми ' + r.pairs : '') + (r.learned ? ' · за історією ' + r.learned : '') + (r.refunds ? ' · повернень ' + r.refunds : '') + (r.parts ? ' · частинами ' + r.parts : '') + (r.recat ? ' · за правилами ' + r.recat : '') +
     ' · ваших рядків знайдено ' + r.matched + (r.other ? ' · з іншого джерела ' + r.other : '') + (r.lost ? ' · ⚠️ не вмістилось ' + r.lost : '') +
     (r.changed ? ' · ⚠️ розбіжностей сум ' + r.changed : '') + ((r.errors || []).length ? ' · ⚠️ ' + r.errors.join('; ') : '');
 }
@@ -711,6 +712,7 @@ function importReport_(r) {
   if (r.pairs) lines.push('Між своїми рахунками (пара сум на двох рахунках): <b>' + r.pairs + '</b>.');
   if (r.learned) lines.push('Категорія за історією (≥ 3 рази й ≥ 80 % однаково): <b>' + r.learned + '</b>.');
   if (r.refunds) lines.push('↩ Повернень за покупки: <b>' + r.refunds + '</b>: мінусом у категорії покупки (витрати категорії зменшились).');
+  if (r.recat) lines.push('🏷 Старі чернетки отримали категорію за правилами: <b>' + r.recat + '</b>.');
   if (r.parts) lines.push('💳 Платежів частинами й за розстрочками: <b>' + r.parts + '</b>' + (modOn_('debts') ? ' (рахуються в «Сплачено» на «' + DEBTS_SHEET + '»).' :
     '. Щоб вести покупки частинами, залишки й ліміт: модуль «🤝 Борги й розстрочки» (меню «🧩 Модулі»).'));
   if ((r.partsNew || []).length) lines.push('💳 Нова покупка частинами на «' + DEBTS_SHEET + '»: <b>' + esc_(r.partsNew.join(', ')) +

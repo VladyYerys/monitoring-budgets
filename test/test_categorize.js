@@ -26,7 +26,7 @@ t('starter rules close 14 of the 15 real examples: shops by name, «погаше
   const env = setup(), c = env.ctx, rules = c.readRules_(env.ss);
   const want = [
     ['ЗаТак', -14340, 'Продукти'], ['VEGETABLES AND FRUITS', -12364, 'Продукти'], ['Експрес Маркет Тест', -21290, 'Продукти'], ['Testvitamin', -8000, 'Продукти'],
-    ['Barkinoteatru Test', -6500, 'Розваги'], ['Громадський транспорт', -2500, 'Транспорт'], ['Аврора', -6200, 'Дім і побут'], ['Zoomagazin Test', -50000, 'Тварини'],
+    ['Kinoteatru Test', -6500, 'Розваги'], ['Громадський транспорт', -2500, 'Транспорт'], ['Аврора', -6200, 'Дім і побут'], ['Zoomagazin Test', -50000, 'Тварини'],
     ['Повне погашення Магазин - monomarket', -61200, 'Кредит / розстрочка'], ['Повне погашення ', -55000, 'Кредит / розстрочка'],
     ['Погашення наступного платежу Магазин', -90000, 'Кредит / розстрочка'],
   ];
@@ -315,22 +315,27 @@ t('↩ refund without the word: same shop and MCC as a purchase → a draft with
   assert.strictEqual(p.drafts.length, 0); assert.strictEqual(p.marks[0].row, 90);
 });
 
-t('↩ «Скасування … в обробці»: for a purchase already settled it is a draft «⏳ в обробці» (not removed as «cancelled by bank»); for a pending purchase or no purchase it is skipped as before; when settled it becomes a fact and keeps the minus', () => {
+t('↩ «Скасування … в обробці»: for a purchase already settled it is a fact at once with «⏳ в обробці» (0.5.8); for a pending purchase or no purchase it is skipped as before; an older draft becomes a fact; when settled the mark goes and the minus stays', () => {
   const env = setup(), c = env.ctx, held = refund('h1', '2026-11-27', 430, { hold: true });
   let p = c.planImport_(refundCtx(env, [], [buy(50, '2026-11-21', 430, 'Дім і побут')], { pending: [held] }));
-  assert.strictEqual(JSON.stringify([p.drafts[0].b, p.drafts[0].c, p.drafts[0].e]), JSON.stringify([-430, 'Дім і побут', '🏦 чернетка']));
-  assert.ok(/⏳ в обробці/.test(p.drafts[0].d)); assert.strictEqual(p.stats.skipped, 0);
+  assert.strictEqual(JSON.stringify([p.drafts[0].b, p.drafts[0].c, p.drafts[0].e]), JSON.stringify([-430, 'Дім і побут', '✅ факт']));
+  assert.ok(/⏳ в обробці/.test(p.drafts[0].d)); assert.strictEqual(p.stats.skipped, 0); assert.strictEqual(p.stats.facts, 1);
   // покупка ще «в обробці» (банк скасовує неcписану оплату) чи покупки немає: пропуск, рядок у журналі «Банк» один раз
   [[buy(50, '2026-11-25', 430, 'Дім і побут', { e: '🏦 чернетка', d: 'MEBLIMAX · ⏳ в обробці' })], []].forEach(j => {
     const q = c.planImport_(refundCtx(env, [], j, { pending: [held] }));
     assert.strictEqual(q.drafts.length, 0); assert.strictEqual(q.stats.skipped, 1); assert.strictEqual(q.log[0][0], 'skip:h1');
     assert.strictEqual(c.planImport_(refundCtx(env, [], j, { pending: [held], logged: new Set(['skip:h1']) })).log.length, 0);
   });
-  // уже в журналі чернеткою «в обробці»: не прибирається, поки Mono тримає її «в обробці»
+  // уже в журналі чернеткою «в обробці» (до 0.5.8): не прибирається й стає фактом, позначка «⏳» лишається, поки Mono тримає
   const draft = jr({ row: 60, key: '2026-11-27', b: -430, c: 'Дім і побут', e: '🏦 чернетка', d: '↩ повернення за покупку 21.11 · Скасування. MEBLIMAX · ⏳ в обробці',
     bank: ['h1', 'Скасування. MEBLIMAX', 430, 5712, '', ''] });
   p = c.planImport_(refundCtx(env, [], [buy(50, '2026-11-21', 430, 'Дім і побут'), draft], { pending: [held], coverFrom: '2026-11-25', coverTo: '2026-11-28' }));
-  assert.strictEqual(p.vanish.length, 0); assert.strictEqual(p.updates.length, 0);
+  assert.strictEqual(p.vanish.length, 0); assert.strictEqual(p.updates.length, 1);
+  assert.strictEqual(p.updates[0].e, '✅ факт'); assert.strictEqual(p.updates[0].d, null, '«⏳» лишається, поки в обробці');
+  // факт «в обробці» проведено: позначка зникає
+  const fact = Object.assign({}, draft, { e: '✅ факт' });
+  p = c.planImport_(refundCtx(env, [refund('h1', '2026-11-27', 430)], [buy(50, '2026-11-21', 430, 'Дім і побут'), fact]));
+  assert.strictEqual(p.updates.length, 1); assert.strictEqual(p.updates[0].e, null); assert.ok(!/⏳/.test(p.updates[0].d), p.updates[0].d);
   // проведено: «✅ факт», сума лишається −430
   p = c.planImport_(refundCtx(env, [refund('h1', '2026-11-27', 430)], [buy(50, '2026-11-21', 430, 'Дім і побут'), draft]));
   assert.strictEqual(p.updates.length, 1); assert.strictEqual(p.updates[0].b, null, 'мінус не перетворюється на плюс'); assert.strictEqual(p.updates[0].e, '✅ факт');
@@ -346,7 +351,8 @@ t('↩ refund through the Mono import: purchase, then «Скасування. �
   env.ss.getSheetByName('Журнал').getRange(row('p1').row, 3).setValue('Дім і побут');        // ви поставили категорію покупці
   env.state.items.push({ id: 'r1', time: sec(env, k1, '01:24'), description: 'Скасування. MEBLIMAX', mcc: 5712, amount: 43000, hold: true, balance: 3957000 });
   let r = c.importBank_(env.ss);
-  assert.strictEqual(JSON.stringify([row('r1').b, row('r1').c, row('r1').e]), JSON.stringify([-430, 'Дім і побут', '🏦 чернетка']));
+  assert.strictEqual(JSON.stringify([row('r1').b, row('r1').c, row('r1').e]), JSON.stringify([-430, 'Дім і побут', '✅ факт']));
+  assert.ok(/⏳ в обробці/.test(row('r1').d));
   assert.strictEqual(r.refunds, 1); assert.strictEqual(r.skipped, 0);
   assert.ok(c.importReport_(r).some(l => /Повернень за покупки: <b>1<\/b>/.test(l)));
   env.state.items[1].hold = false;
@@ -373,6 +379,81 @@ t('↩ formulas: «Списання» (T) counts a minus in expenses as money ba
   assert.strictEqual(j.getRange('S5').getFormula(), s0, 'інші колонки не чіпали');
   assert.ok(/з мінусом, у категорії покупки/.test(j.getRange('A3').getNotes()[0][0]), j.getRange('A3').getNotes()[0][0]);
   assert.strictEqual(K(c, 'STEPS').find(x => x.v === 16).done(env.ss), true);
+});
+
+t('version 21 rules: a shop name beats MCC; Prom.ua only when MCC gives nothing («запасне»); monomarket, Нова Пошта, ATM, own cards; income from a company is salary, on a ФОП account ФОП income; comments ignore «запасне»', () => {
+  const env = setup(), c = env.ctx, rules = c.readRules_(env.ss), FOP = K(c, 'K_FOP');
+  const want = [
+    ['KinoteatrTest', -15000, 5411, 'Розваги'], ['Kinoteatru Test', -8500, 5812, 'Розваги'], ['EPS*CINEMA TEST', -20000, 7832, 'Розваги'],
+    ['Prom.ua', -12500, 5399, 'Дім і побут'], ['Prom.ua', -7300, 5964, 'Prom.ua'], ['prom.ua', -7300, 0, 'Prom.ua'],
+    ['monomarket', -50000, 5311, 'monomarket'], ['Повне погашення Магазин - monomarket', -61200, 4829, 'Кредит / розстрочка'],
+    ['NovaPay', -11500, 4215, 'Нова Пошта'], ['Нова пошта', -6400, 0, 'Нова Пошта'],
+    ['Банкомат DN00TEST', -50000, 6011, 'Вивід готівки'], ['ATM TEST BANK', -50000, 6011, 'Вивід готівки'], ['Atmosfera cafe', -50000, 5812, 'Кафе й ресторани'],
+    ['З Білої картки', 500000, 4829, 'Переказ між своїми рахунками'], ['На чорну картку', -100000, 4829, 'Переказ між своїми рахунками'],
+    ['ТОВАРИСТВО З ОБМЕЖЕНОЮ ВІДПОВІДАЛЬНІСТЮ "ТЕСТ"', 2600000, 4829, 'Зарплата'], ['ТОВ "ТЕСТ"', 1000000, 4829, 'Зарплата'],
+    ['ТОВАРИСТВО З ОБМЕЖЕНОЮ ВІДПОВІДАЛЬНІСТЮ "ТЕСТ"', -100000, 4829, '↔ Переказ (уточніть)'], ['Від: Іван І.', 120000, 4829, '↔ Переказ (уточніть)'],
+  ];
+  want.forEach(w => assert.strictEqual(cat(c, rules, { description: w[0], amount: w[1], mcc: w[2] }), w[3], w[0] + ' ' + w[2]));
+  const fop = (it, amt) => c.categorize_(Object.assign({ id: 'x', mcc: 4829, comment: '' }, it), amt, rules, { name: 'ФОП', kind: FOP }).cat;
+  assert.strictEqual(fop({ description: 'ТОВ "ТЕСТ"' }, 10000), 'Дохід ФОП', 'рахунок ФОП раніше за запасне правило');
+  assert.strictEqual(fop({ description: 'Переказ на картку' }, -100), 'Переказ між своїми рахунками');
+  assert.strictEqual(c.matchRule_(rules, { comment: 'тов "тест"' }, 0, true), null, 'запасні правила лише для банку');
+  assert.strictEqual(c.matchRule_(rules, { comment: 'зарплата' }, 0, true).category, 'Зарплата');
+  // ваше «так» замість «запасне»: Prom.ua виграє й у MCC
+  const sh = env.ss.getSheetByName('Правила'), v = sh.getRange('A5:B204').getValues(), i = v.findIndex(r => /^prom\.ua/.test(r[1]));
+  assert.strictEqual(v[i][0], 'запасне');
+  sh.getRange(5 + i, 1).setValue('так');
+  assert.strictEqual(cat(c, c.readRules_(env.ss), { description: 'Prom.ua', amount: -12500, mcc: 5399 }), 'Prom.ua');
+});
+
+t('version 21 through the Mono import: Prom.ua, monomarket, Нова Пошта, ATM, own cards and company salary come as «✅ факт»; a person-to-person transfer stays a red draft', () => {
+  const env = setup(), c = env.ctx, k = day(env, -1);
+  const it = (id, desc, mcc, amount, hhmm) => ({ id: id, time: sec(env, k, hhmm), description: desc, mcc: mcc, amount: amount, balance: 4000000 });
+  env.state.items = [it('a1', 'Prom.ua', 5964, -12500, '09:00'), it('a2', 'monomarket', 5311, -50000, '09:10'), it('a3', 'NovaPay', 4215, -11500, '09:20'),
+    it('a4', 'Банкомат DN00TEST', 6011, -50000, '09:30'), it('a5', 'З Білої картки', 4829, 300000, '09:40'),
+    it('a6', 'ТОВАРИСТВО З ОБМЕЖЕНОЮ ВІДПОВІДАЛЬНІСТЮ "ТЕСТ"', 4829, 2600000, '09:50'), it('a7', 'Від: Іван І.', 4829, 120000, '10:00')];
+  c.connectMono();
+  c.importBank_(env.ss);
+  const got = c.readJournal_(env.ss).filter(o => o.bank && o.bank[0]).reduce((m, o) => { m[o.bank[0]] = o.c + ' · ' + o.e; return m; }, {});
+  assert.deepStrictEqual(got, { a1: 'Prom.ua · ✅ факт', a2: 'monomarket · ✅ факт', a3: 'Нова Пошта · ✅ факт', a4: 'Вивід готівки · ✅ факт',
+    a5: 'Переказ між своїми рахунками · ✅ факт', a6: 'Зарплата · ✅ факт', a7: '↔ Переказ (уточніть) · 🏦 чернетка' });
+});
+
+t('upgrade of a version-20 table to 21: new categories and rules in free rows, «запасне» in the list; old drafts (ATM, company salary as a red transfer, Prom.ua) get a category and «✅ факт»; refund drafts and person transfers stay', () => {
+  const env = setup(), c = env.ctx, rs = env.ss.getSheetByName('Правила'), ds = env.ss.getSheetByName('Довідник');
+  const NEW = ['Prom.ua', 'monomarket', 'Нова Пошта', 'Вивід готівки'];
+  const rv = rs.getRange('A5:G204').getValues();
+  rv.forEach((r, i) => { if (NEW.indexOf(r[4]) >= 0 || /білої картки|обмеженою/.test(r[1])) rs.getRange(5 + i, 1, 1, 7).setValues([['', '', '', '', '', '', '']]); });
+  ds.getRange('A5:A84').getValues().forEach((r, i) => { if (NEW.indexOf(r[0]) >= 0) ds.getRange(5 + i, 1, 1, 3).setValues([['', '', '']]); });
+  rs.getRange('A5:A204').setDataValidation(c.SpreadsheetApp.newDataValidation().requireValueInList(['так', 'ні', '✨ нове, підтвердіть']).setAllowInvalid(false).build());
+  const k = day(env, -1), it = (id, desc, mcc, amount, hhmm) => ({ id: id, time: sec(env, k, hhmm), description: desc, mcc: mcc, amount: amount, balance: 4000000 });
+  env.state.items = [it('o1', 'Банкомат DN00TEST', 6011, -50000, '09:00'), it('o2', 'ТОВАРИСТВО З ОБМЕЖЕНОЮ ВІДПОВІДАЛЬНІСТЮ "ТЕСТ"', 4829, 2600000, '09:10'),
+    it('o3', 'Prom.ua', 5399, -12500, '09:20'), it('o4', 'Від: Іван І.', 4829, 120000, '09:30'), it('o5', 'Prom.ua', 5964, -7300, '09:40')];
+  c.connectMono();
+  c.importBank_(env.ss);
+  const rows = () => c.readJournal_(env.ss).filter(o => o.bank && o.bank[0]).reduce((m, o) => { m[o.bank[0]] = o.c + ' · ' + o.e; return m; }, {});
+  const before = rows();
+  assert.strictEqual(before.o1, ' · 🏦 чернетка'); assert.strictEqual(before.o2, '↔ Переказ (уточніть) · 🏦 чернетка');
+  assert.strictEqual(before.o3, 'Дім і побут · ✅ факт'); assert.strictEqual(before.o5, ' · 🏦 чернетка');
+  env.docProps.setProperty('schema_v', '20'); env.docProps.deleteProperty('shops_v21');
+  assert.strictEqual(K(c, 'STEPS').find(x => x.v === 21).done(env.ss), false);
+  assert.strictEqual(c.schemaTick_(env.ss), true);
+  assert.strictEqual(env.docProps.getProperty('schema_v'), String(c.schemaLast_()));
+  const after = rows();
+  assert.strictEqual(after.o1, 'Вивід готівки · ✅ факт'); assert.strictEqual(after.o2, 'Зарплата · ✅ факт');
+  assert.strictEqual(after.o3, 'Дім і побут · ✅ факт', 'факт з категорією не чіпаємо'); assert.strictEqual(after.o4, '↔ Переказ (уточніть) · 🏦 чернетка');
+  assert.strictEqual(after.o5, 'Prom.ua · ✅ факт');
+  const names = ds.getRange('A5:A84').getValues().map(r => r[0]);
+  NEW.forEach(n => assert.ok(names.indexOf(n) >= 0, n));
+  const rules = c.readRules_(env.ss);
+  assert.ok(rules.some(r => r.category === 'Вивід готівки' && r.where === 'MCC' && r.text === '6010, 6011'));
+  assert.ok(rules.some(r => r.category === 'Зарплата' && r.active === 'запасне'));
+  assert.ok(rs.getRange('A5').getDataValidation().getCriteriaValues()[0].indexOf('запасне') >= 0);
+  // ще раз: нічого не дублюється
+  const n0 = c.readRules_(env.ss).length;
+  c.rulesUpgrade21_(env.ss);
+  assert.strictEqual(c.readRules_(env.ss).length, n0);
+  assert.strictEqual(K(c, 'STEPS').find(x => x.v === 21).done(env.ss), true);
 });
 
 console.log(n + ' tests passed');

@@ -50,6 +50,8 @@ const STEPS = [
     auto: ss => stepFree19_(ss), done: ss => freeNew_(ss) },
   { v: 20, title: '🎨 «Регулярні»: угорі «Заплати собі» й «Інвестиції», далі ваші рядки, приклади внизу; кольори груп, вимкнені сірі',
     auto: ss => stepRegOrder20_(ss), done: ss => !ss.getSheetByName(REG_SHEET) || String(ss.getSheetByName(REG_SHEET).getRange('P' + REG_FIRST).getFormula()) !== '' },
+  { v: 21, title: '🛍 Категорії «' + CAT_PROM + '», «' + CAT_MONO + '», «' + CAT_NP + '», «' + CAT_CASH + '» з правилами; «З Білої картки»: між своїми; надходження від ТОВ: зарплата; правила «' + RULE_SPARE + '»; старі чернетки отримують категорію',
+    auto: ss => stepShops21_(ss), done: ss => !!PropertiesService.getDocumentProperties().getProperty('shops_v21') || !ss.getSheetByName(RULES_SHEET) },
 ];
 /** Остання версія таблиці в цьому коді. */
 function schemaLast_() { return STEPS[STEPS.length - 1].v; }
@@ -280,6 +282,16 @@ function stepRefund16_(ss) {
   try { startRefresh_(ss); } catch (e) { /* «Швидке підключення» оновиться завтра */ }
   return ['Повернення за покупку: пишіть суму з мінусом у категорії покупки (наприклад, «Одяг −1 200»). Витрати категорії зменшаться, гроші повернуться в «мої».',
     'Імпорт з банку робить це сам для «Скасування. …» від Mono: бере категорію покупки з журналу.'];
+}
+
+/** Версія 21: категорії й правила для маркетплейсів, потім правила для старих чернеток без категорії. */
+function stepShops21_(ss) {
+  const out = dictAddCats_(ss, [[CAT_PROM, T_SPEND, '🛍 Покупки'], [CAT_MONO, T_SPEND, '🛍 Покупки'], [CAT_NP, T_SPEND, '🛍 Покупки'], [CAT_CASH, T_SPEND, '📦 Інше']]);
+  rulesUpgrade21_(ss).forEach(c => out.push('правило «' + c + '»'));
+  const n = ss.getSheetByName(JOURNAL) ? draftsRecat_(ss) : 0;
+  if (n) out.push('чернеток отримали категорію: ' + n);
+  PropertiesService.getDocumentProperties().setProperty('shops_v21', '1');
+  return ['Оновлено: ' + (out.join('; ') || 'нічого') + '.'];
 }
 
 /** Версія 20: порядок рядків «Регулярних» і кольори. Значення рядків не змінюються, лише місце. */

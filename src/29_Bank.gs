@@ -18,7 +18,8 @@
  * або без слова, але той самий магазин і MCC, що в покупці. Шукаємо покупку цього рахунку в журналі: той самий магазин, сума не
  * менша за повернення, до 60 днів тому. Рядок: категорія покупки, сума з мінусом («Одяг −1 200»), коментар «↩ повернення за покупку 12.11».
  * Немає покупки: категорія з правила для магазину; немає й правила: чернетка без категорії. Без слова: завжди чернетка (перевірте).
- * «Скасування … в обробці» за вже списаною покупкою: чернетка «⏳ в обробці» (сама стане фактом); за ще не списаною чи невідомою: пропуск, як і раніше.
+ * З категорією й словом «Скасування» повернення одразу «✅ факт» (версія 0.5.8), навіть «в обробці» (позначка «⏳» зникне, коли Mono проведе).
+ * «Скасування … в обробці» за ще не списаною покупкою чи невідомою: пропуск, як і раніше.
  * Покупка частинами й розстрочка (версія 0.5.4, модуль «🤝 Борги й розстрочки»): «Платіж МАГАЗИН - monomarket» (перший платіж),
  * «Погашення МАГАЗИН - monomarket», «Повне погашення МАГАЗИН - monomarket» чи «Повне погашення» (розстрочка на картку).
  * Рядок «Боргів» шукаємо за «Назвою в банку» чи назвою; план цього боргу ±10 днів закривається незалежно від категорії й суми;
@@ -138,9 +139,14 @@ function isPendingReversal_(it) {
 /** Чиста функція: категорія операції: комісія, правило; на рахунку ФОП: надходження → «Дохід ФОП», переказ → між своїми; інакше переказ → червоний. */
 function categorize_(it, amt, rules, acc) {
   if (it._fee) return { cat: CAT_FEE, hole: HOLE_FEE, rule: null };
-  const rule = matchRule_(rules, { desc: it.description, comment: it.comment, mcc: it.mcc, cname: it.counterName, ciban: it.counterIban, cedrpou: it.counterEdrpou }, amt, false);
+  const op = { desc: it.description, comment: it.comment, mcc: it.mcc, cname: it.counterName, ciban: it.counterIban, cedrpou: it.counterEdrpou };
+  const rule = matchRule_(rules, op, amt, false, 'main');
   if (rule) return { cat: rule.category, hole: rule.hole, rule: rule };
-  if (acc && acc.kind === K_FOP) return { cat: isTransfer_(it) && amt < 0 ? CAT_OWN_MOVE : amt > 0 ? CAT_FOP_INCOME : '', hole: '', rule: null };
+  const fop = acc && acc.kind === K_FOP;
+  if (fop && amt > 0) return { cat: CAT_FOP_INCOME, hole: '', rule: null };       // рахунок ФОП: раніше за запасні правила («ТОВ» тут дохід, не зарплата)
+  const spare = matchRule_(rules, op, amt, false, 'spare');
+  if (spare) return { cat: spare.category, hole: spare.hole, rule: spare };
+  if (fop) return { cat: isTransfer_(it) && amt < 0 ? CAT_OWN_MOVE : '', hole: '', rule: null };
   return { cat: isTransfer_(it) ? CAT_TRANSFER : '', hole: '', rule: null };
 }
 
@@ -361,11 +367,15 @@ function planImport_(ctx) {
       const old = row.bank || [];
       const balDiff = own !== '' && (old[5] === '' || old[5] === null || old[5] === undefined || Math.abs(Number(old[5]) - own) >= 0.005);
       if (sumDiff && !draft) { out.stats.changed++; out.log.push(base.concat(['⚠️ сума в банку ' + abs + ', у журналі ' + row.b + ', перевірте', row.row])); }
-      const promote = draft && ctx.autoFact && !it.hold && !looseCat_(row.c) && row.d.indexOf('⏳ в обробці') >= 0;   // «в обробці» завершилось
-      if (promote) { out.stats.facts++; out.log.push(base.concat(['«в обробці» завершилось: ✅ факт', row.row])); }
-      if ((sumDiff && draft) || keyDiff || balDiff || promote) {
+      const held = row.d.indexOf('⏳ в обробці') >= 0;
+      const refund = Number(row.b) < 0 && row.d.indexOf(REFUND_NOTE) === 0 && row.d.indexOf('перевірте') < 0;   // повернення «Скасування. …»: факт і «в обробці»
+      const promote = draft && ctx.autoFact && !looseCat_(row.c) && ((!it.hold && held) || refund);
+      const settled = !draft && !it.hold && held;                                      // факт «в обробці» проведено: прибрати позначку
+      if (promote) { out.stats.facts++; out.log.push(base.concat([refund ? '↩ повернення: ✅ факт' : '«в обробці» завершилось: ✅ факт', row.row])); }
+      const clean = d => d.replace(HOLD_NOTE, '').replace('⏳ в обробці', '').replace(/ · $/, '');
+      if ((sumDiff && draft) || keyDiff || balDiff || promote || settled) {
         out.updates.push({ row: row.row, b: sumDiff && draft ? want : null, key: keyDiff ? key : null, bank: bank,
-          e: promote ? STATUS_FACT : null, d: promote ? row.d.replace(HOLD_NOTE, '').replace('⏳ в обробці', '').replace(/ · $/, '') : null });
+          e: promote ? STATUS_FACT : null, d: (promote && !it.hold) || settled ? clean(row.d) : null });
         if (sumDiff && draft) { out.stats.resized++; out.log.push(base.concat(['сума уточнилась: ' + row.b + ' → ' + want, row.row])); }
         if (keyDiff) { out.stats.redated++; out.log.push(base.concat(['дату уточнено: ' + row.key + ' → ' + key, row.row])); }
       }
@@ -426,7 +436,7 @@ function planImport_(ctx) {
         if (rr) { cat = rr.category; why = 'правило: ' + rr.text.slice(0, 40); }
       }
       if (rf.buy) refundClaimed[rf.buy.row] = 1;
-      const e = rf.word ? statusOf(cat, it.hold) : STATUS_DRAFT;
+      const e = rf.word ? statusOf(cat, false) : STATUS_DRAFT;                // «Скасування. …» з категорією: факт одразу, навіть «в обробці»
       out.stats.refunds++;
       if (e === STATUS_FACT) out.stats.facts++;
       if (!cat) out.stats.uncategorized++;
@@ -509,9 +519,36 @@ function writeDrafts_(sh, journal, plan, tz, acc) {
 }
 
 /** Підтвердити всі чернетки, де вже є категорія (крім червоних переказів). */
+/**
+ * Чернетки з банку без категорії (порожня чи «↔ уточніть»), для яких тепер є правило (ви додали нове чи шаблон додав стартове):
+ * категорія з правила, і «✅ факт», якщо «одразу факт» увімкнено й операція не «в обробці». Платіж частинами: «Кредит / розстрочка».
+ * Ваші рядки (без номера банку) і повернення без категорії не чіпає. Спершу слова, потім MCC, як в імпорті. → скільки
+ */
+function draftsRecat_(ss) {
+  const j = ss.getSheetByName(JOURNAL);
+  if (!j || !ss.getSheetByName(RULES_SHEET)) return 0;
+  const rules = readRules_(ss), auto = autoFact_(ss);
+  let n = 0;
+  readJournal_(ss).forEach(o => {
+    if (o.blank || o.e !== STATUS_DRAFT || !(o.c === '' || o.c === CAT_TRANSFER) || !o.bank || !o.bank[0]) return;
+    if (String(o.d).indexOf(REFUND_NOTE) === 0) return;
+    const amt = Number(o.bank[2]), desc = String(o.bank[1] || '');
+    if (!amt) return;
+    let cat = amt < 0 && partsOf_(desc) ? CAT_PARTS : '';
+    if (!cat) { const r = matchRule_(rules, { desc: desc, comment: '', mcc: Number(o.bank[3] || 0) }, amt, false, o.kind === K_FOP && amt > 0 ? 'main' : ''); if (r) cat = r.category; }
+    if (!cat || looseCat_(cat)) return;
+    j.getRange(o.row, colNum_(JC.cat)).setValue(cat);
+    if (auto && String(o.d).indexOf('⏳') < 0) j.getRange(o.row, colNum_(JC.status)).setValue(STATUS_FACT);
+    n++;
+  });
+  return n;
+}
+
 function confirmDrafts() {
   if (!menuOk_('✅ Чернетки')) return;
   const ui = SpreadsheetApp.getUi(), sh = SpreadsheetApp.getActive().getSheetByName(JOURNAL);
+  const recat = draftsRecat_(SpreadsheetApp.getActive());                      // спершу правила для чернеток без категорії
+  if (recat) SpreadsheetApp.getActive().toast('За правилами отримали категорію: ' + recat, '✅ Чернетки', 5);
   const ce = sh.getRange(J_FIRST, 3, J_LAST - J_FIRST + 1, 3).getValues();
   const rows = [];
   ce.forEach((v, i) => { if (v[2] === STATUS_DRAFT && v[0] !== '' && v[0] !== CAT_TRANSFER) rows.push(J_FIRST + i); });

@@ -8,7 +8,7 @@
  */
 
 const TEMPLATE_MARK = 'monitoring-budgets-template';   // мітка шаблону: її шукає CI перед заливкою (ci/guard.js)
-const TEMPLATE_VERSION = '0.5.7';
+const TEMPLATE_VERSION = '0.5.8';
 const SUPPORT_URL = 'https://send.monobank.ua/jar/6ChdYHjkd9';   // «❤️ Підтримати автора»: публічна банка автора
 const APP_NAME = 'Monitoring Budgets';
 const REPO_URL = 'https://github.com/VladyYerys/monitoring-budgets';                 // відкритий код, «Що нового», питання (issues)
@@ -61,7 +61,9 @@ const STATUS_FACT = '✅ факт', STATUS_DRAFT = '🏦 чернетка', STAT
 const STATUSES = [STATUS_FACT, STATUS_DRAFT, STATUS_PLAN, STATUS_REG];
 function isPlan_(e) { return e === STATUS_PLAN || e === STATUS_REG; }
 const CAT_TRANSFER = '↔ Переказ (уточніть)';
-const CAT_SELF = 'Заплати собі', CAT_INVEST = 'Інвестиції';      // версія 18: тип «Заощадження», шапка «Регулярних»
+const CAT_SELF = 'Заплати собі', CAT_INVEST = 'Інвестиції';
+const CAT_PROM = 'Prom.ua', CAT_MONO = 'monomarket', CAT_NP = 'Нова Пошта';   // версія 21: окремими категоріями (підкатегорії: ваші)
+const CAT_CASH = 'Вивід готівки';                                                 // версія 21: банкомат      // версія 18: тип «Заощадження», шапка «Регулярних»
 const CAT_OWN_MOVE = 'Переказ між своїми рахунками', CAT_FOP_INCOME = 'Дохід ФОП';
 const CAT_TAX = { ep: 'Єдиний податок', esv: 'ЄСВ', vz: 'Військовий збір' };
 

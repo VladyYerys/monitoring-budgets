@@ -3,14 +3,16 @@
 /*
  * Рядок правила: Активне? · Текст (кілька слів через кому) · Де шукати (опис банку / коментар / будь-де / MCC / отримувач) ·
  * Напрям (усі / списання / надходження) · Категорія · Непомітна · Примітка. Перше активне правило, що підходить, виграє.
+ * «запасне» в «Активне?»: правило для операцій з банку спрацює, лише коли жодне інше (зі словами чи MCC) не підійшло (версія 0.5.8).
  * MCC: числа або діапазони через кому («5812, 5813-5814»). Регістр і цифри в описі не мають значення.
  * Отримувач: назва (counterName), IBAN чи ЄДРПОУ / ІПН, як їх дає банк (видно у «🔎 Сирі дані Mono»). Число в тексті
  * (5+ цифр) порівнюється з кодом чи IBAN, слова: з назвою. «будь-де» теж дивиться в назву отримувача.
  * Скрипт сам пропонує правило («✨ нове, підтвердіть»), коли ви змінюєте категорію рядка з банку.
  */
 
-const NEW_RULE = '✨ нове, підтвердіть';
+const NEW_RULE = '✨ нове, підтвердіть', RULE_SPARE = 'запасне';
 const RULE_WHERE = ['опис банку', 'коментар', 'будь-де', 'MCC', 'отримувач'], RULE_DIR = ['усі', 'списання', 'надходження'];
+const RULE_ACTIVE = ['так', 'ні', NEW_RULE, RULE_SPARE];
 
 /** Стартові правила: загальні назви мереж і коди MCC, жодних особистих даних. Людина змінює їх під себе. */
 const RULES_TAX = [
@@ -28,7 +30,7 @@ const RULES_V13_TEXT = [
   ['так', 'супермаркет, supermarket, експрес маркет, express market, мінімаркет, minimarket, vegetables, fruits, овочі, фрукти, vitamin, затак, za tak', 'опис банку', 'списання', 'Продукти'],
   ['так', 'аврора, avrora', 'опис банку', 'списання', 'Дім і побут'],
   ['так', 'зоомагазин, zoomagazin, зоотовари, zootovary, masterzoo, мастерзоо, petshop, pet shop', 'опис банку', 'списання', 'Тварини'],
-  ['так', 'кінотеатр, kinoteatr, кіно, kino, multiplex, мультиплекс', 'опис банку', 'списання', 'Розваги'],
+  ['так', 'кінотеатр, kinoteatr, кіно, kino, multiplex, мультиплекс, cinema, синема', 'опис банку', 'списання', 'Розваги'],
   ['так', 'громадський транспорт, проїзд, трамвай, тролейбус, автобус', 'опис банку', 'списання', 'Транспорт'],
 ];
 const RULES_V13_MCC = [
@@ -47,8 +49,24 @@ const RULES_V13_MCC = [
   ['так', '3000-3299, 4511, 3501-3999, 7011', 'MCC', 'списання', 'Подорожі'],
 ];
 const RULES_V13 = RULES_V13_TEXT.concat(RULES_V13_MCC);
+/**
+ * Версія 21: маркетплейси, Нова Пошта, банкомат, між своїми картками, зарплата від компанії. Платежі частинами
+ * («Платіж / Погашення … - monomarket») ловить partsOf_ раніше за правила. Prom.ua «запасне»: якщо MCC дає категорію
+ * (скажімо, «Дім і побут»), лишається вона; Prom.ua, коли нічого іншого немає. Надходження від ТОВ теж «запасне»:
+ * ваші правила й рахунок ФОП («Дохід ФОП») ідуть раніше.
+ */
+const RULES_V21 = [[RULE_SPARE, 'prom.ua, prom ua, promua, пром.юа, пром юа', 'опис банку', 'списання', CAT_PROM],
+  ['так', 'monomarket, мономаркет', 'опис банку', 'списання', CAT_MONO],
+  ['так', 'novapay, nova pay, нова пошта, nova poshta, novaposhta, новапошта', 'опис банку', 'списання', CAT_NP],
+  // між своїми картками Mono (опис «З Білої картки», «На чорну картку»…): не дохід і не витрата
+  ['так', 'з білої картки, на білу картку, з чорної картки, на чорну картку, з залізної картки, на залізну картку, з платинової картки, на платинову картку',
+    'опис банку', 'усі', CAT_OWN_MOVE],
+  ['так', 'банкомат, bankomat, зняття готівки, видача готівки, cash withdrawal', 'опис банку', 'списання', CAT_CASH],
+  ['так', '6010, 6011', 'MCC', 'списання', CAT_CASH],
+  [RULE_SPARE, 'товариство з обмеженою відповідальністю, товариство з додатковою відповідальністю, тов ", тов «, приватне підприємство',
+    'будь-де', 'надходження', 'Зарплата']];
 
-const RULES_START = RULES_TAX.concat(RULES_V13_TEXT.slice(0, 2), [
+const RULES_START = RULES_TAX.concat(RULES_V13_TEXT.slice(0, 2), RULES_V21, [
   ['так', 'атб, сільпо, novus, фора, ашан, auchan, metro, varus, близенько, eko market, космос', 'опис банку', 'списання', 'Продукти'],
   ['так', 'glovo, bolt food, rocket', 'опис банку', 'списання', 'Доставка їжі'],
   ['так', 'uklon, bolt, uber', 'опис банку', 'списання', 'Таксі'],
@@ -74,13 +92,14 @@ function buildRules_(ss) {
   sh.getRange(1, 1).setValue('🧭 Правила').setFontWeight('bold').setFontSize(14);
   sh.getRange(2, 1).setValue('Яку категорію ставити операції з банку (і рядку, де категорія порожня, а в коментарі є слово). ' +
     'Перше активне правило, що підходить, виграє. «' + NEW_RULE + '»: запропонував скрипт, поставте «так», якщо згодні. ' +
+    '«' + RULE_SPARE + '»: спрацює, лише коли жодне інше правило не підійшло. ' +
     '«отримувач»: назва, IBAN чи ЄДРПОУ з банку (видно в меню «🔎 Сирі дані Mono»).').setFontColor('#5f6368');
   sh.getRange(4, 1, 1, 7).setValues([['Активне?', 'Текст (через кому)', 'Де шукати', 'Напрям', 'Категорія', 'Непомітна', 'Примітка']]).setFontWeight('bold');
   const n = RULES_LAST - RULES_FIRST + 1, rows = [];
   for (let i = 0; i < n; i++) { const x = RULES_START[i]; rows.push(x ? [x[0], x[1], x[2], x[3], x[4], '', ''] : ['', '', '', '', '', '', '']); }
   sh.getRange(RULES_FIRST, 1, n, 7).setValues(rows);
   const dv = (col, rule) => sh.getRange(col + RULES_FIRST + ':' + col + RULES_LAST).setDataValidation(rule.build());
-  dv('A', SpreadsheetApp.newDataValidation().requireValueInList(['так', 'ні', NEW_RULE]).setAllowInvalid(false));
+  dv('A', SpreadsheetApp.newDataValidation().requireValueInList(RULE_ACTIVE).setAllowInvalid(false));
   dv('C', SpreadsheetApp.newDataValidation().requireValueInList(RULE_WHERE).setAllowInvalid(false));
   dv('D', SpreadsheetApp.newDataValidation().requireValueInList(RULE_DIR).setAllowInvalid(false));
   if (d) {
@@ -130,10 +149,13 @@ function whoMatch_(terms, op) {
  * Чиста функція: перше активне правило, що підходить.
  * op: {desc, comment, mcc, cname?, ciban?, cedrpou?} (отримувач з банку); amount: зі знаком (0: напрям невідомий);
  * commentOnly: лише правила для коментаря (рядок, який ви вписали самі).
+ * pass: '' усі (запасні наприкінці), 'main' без запасних, 'spare' лише запасні.
  */
-function matchRule_(rules, op, amount, commentOnly) {
-  for (const r of rules) {
-    if (r.active !== 'так') continue;
+function matchRule_(rules, op, amount, commentOnly, pass) {
+  // спершу слова й отримувач, потім MCC (версія 0.5.8): «Kinoteatr…» з MCC продуктового магазину все одно «Розваги»; потім запасні
+  const on = rules.filter(r => r.active === 'так'), spare = commentOnly ? [] : rules.filter(r => r.active === RULE_SPARE);   // запасні: лише для банку
+  const ordered = pass === 'spare' ? spare : on.filter(r => r.where !== 'MCC').concat(on.filter(r => r.where === 'MCC'), pass === 'main' ? [] : spare);
+  for (const r of ordered) {
     if (commentOnly && r.where !== 'коментар' && r.where !== 'будь-де') continue;
     if (r.where === 'отримувач') {
       if (amount < 0 && r.dir === 'надходження') continue;
@@ -210,6 +232,26 @@ function rulesUpgrade13_(ss) {
   });
   sh.getRange('C' + RULES_FIRST + ':C' + RULES_LAST).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(RULE_WHERE).setAllowInvalid(false).build());
   PropertiesService.getDocumentProperties().setProperty('rules_v13', '1');
+  return out;
+}
+
+/** Оновлення «Правил» (версія 21): RULES_V21 у вільні рядки, якщо таких ще немає (за першим словом), «запасне» у списку «Активне?». → [категорії] */
+function rulesUpgrade21_(ss) {
+  const sh = ss.getSheetByName(RULES_SHEET), out = [];
+  if (!sh) return out;
+  // спершу список «Активне?» з «запасне»: інакше старе правило перевірки не пустить такий рядок
+  sh.getRange('A' + RULES_FIRST + ':A' + RULES_LAST).setDataValidation(SpreadsheetApp.newDataValidation().requireValueInList(RULE_ACTIVE).setAllowInvalid(false).build());
+  const v = sh.getRange(RULES_FIRST, 1, RULES_LAST - RULES_FIRST + 1, 7).getValues();
+  const keyOf = (t, mcc) => mcc ? String(t).trim() : norm_(t);                 // norm_ прибирає цифри, тож MCC порівнюємо як є
+  RULES_V21.forEach(x => {
+    const mcc = x[2] === 'MCC', key = keyOf(x[1].split(',')[0], mcc);
+    if (v.some(r => (String(r[2]) === 'MCC') === mcc && String(r[1]).split(',').some(t => keyOf(t, mcc) === key))) return;
+    const free = v.findIndex(r => r.every(c => c === '' || c === null));
+    if (free < 0) return;
+    v[free] = [x[0], x[1], x[2], x[3], x[4], '', 'стартове, ' + TEMPLATE_VERSION];
+    sh.getRange(RULES_FIRST + free, 1, 1, 7).setValues([v[free]]);
+    out.push(x[4]);
+  });
   return out;
 }
 
