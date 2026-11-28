@@ -126,7 +126,7 @@ t('schedule: once a day or after an edit on «Регулярні» (onEdit marks
   assert.ok(env.calls.menu.indexOf('regularNow') >= 0);
 });
 
-t('examples: 19 kinds (subscriptions, rent, utilities, fuel, sport, insurance, salary, loan, installment, debts, savings) with «ні», no plans, a hint in «Стан»; yours count, examples do not; added once; a step adds them to an older table after your rows', () => {
+t('examples: 21 kinds (subscriptions, rent, utilities, fuel, sport, insurance, salary, loan, installment, debts, savings) with «ні», no plans, a hint in «Стан»; yours count, examples do not; added once; a step adds them to an older table after your rows', () => {
   const env = setup(), c = env.ctx, r = env.ss.getSheetByName('Регулярні'), n = K(c, 'REG_EXAMPLES').length;
   const rows = r.getRange('A5:I54').getValues().filter(x => x[0]);
   assert.strictEqual(rows.length, n);
@@ -134,8 +134,9 @@ t('examples: 19 kinds (subscriptions, rent, utilities, fuel, sport, insurance, s
   ['Netflix', 'Бензин', 'Оренда квартири', 'Страховка авто', 'Зарплата', 'Кредит у банку', 'Розстрочка за телефон', 'Повертаю борг другу', 'Мені повертають борг']
     .forEach(name => assert.ok(rows.some(x => x[0] === name), name));
   assert.ok(rows.some(x => x[4] === 'щокварталу') && rows.some(x => x[4] === 'щороку') && rows.some(x => x[6] !== ''), 'щокварталу, щороку, з датою «До»');
-  assert.ok(/приклади/.test(r.getRange('A3').getValue()) && /«так»/.test(r.getRange('A3').getValue()));
-  assert.ok(r.getRange('J5:J23').getValues().every(x => /^💡 приклад, «ні»: /.test(x[0])), 'підказка в «Стані»');
+  const noteA4 = r.getRange('A4').getNotes()[0][0];
+  assert.ok(/приклади/.test(noteA4) && /«так»/.test(noteA4), 'підказка про приклади: у примітці на «Назва» (рядки 1–3: шапка)');
+  assert.ok(r.getRange('J5:J' + (4 + n)).getValues().every(x => /^💡 приклад, «ні»: /.test(x[0])), 'підказка в «Стані»');
   assert.ok(/Борги/.test(r.getRange('J18').getValue()), 'кредит: на «Борги»');
   assert.strictEqual(c.readJournal_(env.ss).filter(o => o.d.indexOf('[Регулярний] ') === 0).length, 0, 'прикладів у журналі немає');
   assert.strictEqual(c.regOwn_(env.ss).length, 0, 'приклади не рахуються як ваші');
@@ -158,6 +159,62 @@ t('examples: 19 kinds (subscriptions, rent, utilities, fuel, sport, insurance, s
   assert.strictEqual(r2.getRange('A5').getValue(), 'Моя оренда');
   assert.strictEqual(r2.getRange('A7').getValue(), 'Netflix');
   assert.strictEqual(env2.ctx.regOwn_(env2.ss).length, 2);
+});
+
+t('📊 header (rows 1–3): dark tiles like «Charts»; first tile «💰 Собі й інвестиції»; then connected, left over, this month, 30 days with a column chart; «Борги» tile (K:L) only with the module; helper columns N…U hidden; old title and hints gone', () => {
+  const env = setup(), c = env.ctx, r = env.ss.getSheetByName('Регулярні');
+  const f = a => r.getRange(a).getFormula(), v = a => String(r.getRange(a).getValue());
+  ['A1', 'A2', 'A3'].forEach(a => assert.ok(!/Регулярні платежі й надходження|Кожен рядок стає планом|Нижче приклади/.test(v(a)), a + ': ' + v(a)));
+  assert.ok(/СОБІ Й ІНВЕСТИЦІЇ/.test(f('A1')) && /SPARKLINE\(\$S\$2:\$S\$3,\$T\$1:\$U\$4\)/.test(f('A3')), f('A1') + '\n' + f('A3'));
+  assert.strictEqual(f('A2').indexOf('=TEXT($S$4'), 0);
+  assert.ok(/ПІДКЛЮЧЕНО/.test(v('C1')) && f('C2') === '=$S$10');
+  assert.ok(/ЛИШАЄТЬСЯ/.test(f('E1')) && f('E2') === '=$S$8' && /SPARKLINE\(\$S\$26:\$S\$27/.test(f('E3')));
+  assert.ok(/ЦЕЙ МІСЯЦЬ/.test(f('G1')) && /ПРОСТРОЧЕНО/.test(f('G1')) && /SPARKLINE\(\$S\$14:\$S\$15/.test(f('G3')));
+  assert.ok(/30 ДНІВ/.test(f('I1')) && /SPARKLINE\(\$Q\$5:\$Q\$34,\$T\$16:\$U\$18\)/.test(f('I3')));
+  assert.strictEqual(v('K1'), '', 'модуль боргів вимкнено: плитки «Борги» немає');
+  assert.ok(['A1:B1', 'A2:B2', 'A3:B3', 'I1:J1'].every(m => (r.merges || []).indexOf(m) >= 0), JSON.stringify(r.merges));
+  // службові: на місяць (щокварталу /3, щороку /12, лише «так», не після «До»), тип з «Довідника», дні, підсумки
+  assert.ok(/IF\(\$E5="щокварталу",1\/3,IF\(\$E5="щороку",1\/12,1\)\)/.test(f('N5')) && /\$I5<>"так"/.test(f('N5')) && /N\(\$G5\)<TODAY\(\)/.test(f('N5')), f('N5'));
+  assert.ok(/VLOOKUP\(\$B5,'Довідник'!\$A\$5:\$B\$/.test(f('O5')));
+  assert.ok(/"\[Регулярний\] \*"/.test(f('Q5')) && /"\[Борг\] \*"/.test(f('Q5')) && /TODAY\(\)\+29/.test(f('Q34')));
+  assert.ok(/"Заплати собі"/.test(f('S2')) && /"Інвестиції"/.test(f('S3')) && /FILTER\(/.test(f('S19')));
+  assert.ok(r.isColumnHiddenByUser(14) && r.isColumnHiddenByUser(21) && !r.isColumnHiddenByUser(10));
+  assert.ok(/Кожен рядок стає планом/.test(r.getRange('A4').getNotes()[0][0]));
+  // модуль боргів: плитка K:L і підсумки з «Боргів»; вимкнули: знову порожньо
+  c.modSet_(env.ss, 'debts', true); c.modulesApply_(env.ss, true);
+  assert.ok(/БОРГИ/.test(v('K1')) && f('K2') === '=$S$6' && /'Борги'!\$D\$5:\$D\$24/.test(f('S6')), f('S6'));
+  c.modSet_(env.ss, 'debts', false); c.modulesApply_(env.ss, true);
+  assert.strictEqual(v('K1'), ''); assert.strictEqual(f('S6'), '');
+  // повторно: та сама шапка, без подвоєння
+  c.regHeader_(env.ss);
+  assert.strictEqual((r.merges || []).filter(m => m === 'A1:B1').length, 1);
+  const all = r.getRange('A1:U4').getValues().map(x => x.join(' ')).join(' ') + r.getRange('A1:U4').getFormulas().map(x => x.join(' ')).join(' ');
+  assert.ok(all.indexOf('—') < 0, 'без довгих тире');
+});
+
+t('📊 categories «Заплати собі» and «Інвестиції» (type «Заощадження») and two examples; upgrade of a version-17 table: old rows 1–3 replaced by the header, categories and examples added once after your rows', () => {
+  const env = setup(), c = env.ctx, d = env.ss.getSheetByName('Довідник');
+  const cats = () => d.getRange('A5:C84').getValues().filter(x => x[0]);
+  ['Заплати собі', 'Інвестиції'].forEach(n => assert.strictEqual(JSON.stringify(cats().find(x => x[0] === n).slice(1)), JSON.stringify(['Заощадження', '💰 Заощадження']), n));
+  const r = env.ss.getSheetByName('Регулярні');
+  assert.ok(r.getRange('A5:B54').getValues().some(x => x[0] === 'Заплати собі' && x[1] === 'Заплати собі'));
+  // стара таблиця: без категорій, без нових прикладів, старі рядки 1–3
+  const env2 = setup(), c2 = env2.ctx, d2 = env2.ss.getSheetByName('Довідник'), r2 = env2.ss.getSheetByName('Регулярні');
+  d2.getRange('A5:A84').getValues().forEach((x, i) => { if (x[0] === 'Заплати собі' || x[0] === 'Інвестиції') d2.getRange(5 + i, 1, 1, 3).setValues([['', '', '']]); });
+  r2.getRange('A5:J54').getValues().forEach((x, i) => { if (x[0] === 'Заплати собі' || x[0] === 'Інвестиції') r2.getRange(5 + i, 1, 1, 10).setValues([Array(10).fill('')]); });
+  r2.getRange('A1:A3').setValues([['🔁 Регулярні платежі й надходження'], ['Кожен рядок стає планом…'], ['Нижче приклади з «Увімкнено: ні»…']]);
+  r2.getRange('S10').setValue(''); r2.getRange('N5').setFormula('');
+  env2.docProps.deleteProperty('reg_ex2');
+  env2.docProps.setProperty('schema_v', '17');
+  assert.strictEqual(K(c2, 'STEPS').find(x => x.v === 18).done(env2.ss), false);
+  c2.schemaTick_(env2.ss);
+  assert.strictEqual(env2.docProps.getProperty('schema_v'), String(c2.schemaLast_()));
+  assert.ok(d2.getRange('A5:A84').getValues().some(x => x[0] === 'Заплати собі') && d2.getRange('A5:A84').getValues().some(x => x[0] === 'Інвестиції'));
+  const names = r2.getRange('A5:A54').getValues().map(x => x[0]);
+  assert.ok(names.indexOf('Заплати собі') >= 0 && names.indexOf('Інвестиції') >= 0 && names.indexOf('Netflix') === 0, names.join(','));
+  assert.ok(/СОБІ Й ІНВЕСТИЦІЇ/.test(r2.getRange('A1').getFormula()) && String(r2.getRange('A2').getValue()).indexOf('Кожен рядок') < 0);
+  assert.strictEqual(K(c2, 'STEPS').find(x => x.v === 18).done(env2.ss), true);
+  assert.strictEqual(c2.regExamplesMore_(env2.ss), 0, 'вдруге не додаються');
 });
 
 console.log(n + ' tests passed');

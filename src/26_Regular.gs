@@ -14,6 +14,9 @@
  * Приклади (REG_EXAMPLES): підписки, оренда, комуналка, бензин, спорт, садок, страховка, подарунки, зарплата, кредит, розстрочка,
  * борг другу й вам, заощадження, донат. Усі з «Увімкнено: ні», тож планів не ставлять; позначка в примітці колонки A
  * («💡 Приклад…»), підказка в «Стані». Свій платіж: новий рядок або поправте приклад і поставте «так». Додаються один раз.
+ * Шапка (рядки 1–3, версія 18): темні плитки в стилі Grafana, як «Charts»: 💰 собі й інвестиції (першою), 🔁 підключено,
+ * 💵 лишається з доходу, 📅 цей місяць, ⏭ найближчі 30 днів (графік по днях), 💳 борги (K:L, з модулем). Усе формулами;
+ * службові колонки N…U сховані (на місяць, тип, дні, підсумки, параметри графіків). Пояснення: примітки на заголовках (рядок 4).
  */
 
 const REG_SHEET = 'Регулярні';
@@ -45,14 +48,13 @@ const REG_EXAMPLES = [
   ['Повертаю борг другу', 'Повернення боргу', 1000, 10, 'щомісяця', 0, 0, 'позика з залишком: аркуш «' + DEBTS_SHEET + '»'],
   ['Мені повертають борг', 'Мені повернули борг', 1000, 20, 'щомісяця', 0, 0, 'вам винні: це надходження'],
   ['Відкладаю на заощадження', 'Заощадження', 3000, 26, 'щомісяця', 0, 0, 'відкладати після зарплати: переказ на банку чи депозит'],
+  ['Заплати собі', CAT_SELF, 4000, 25, 'щомісяця', 0, 0, 'першим ділом у день зарплати: собі, решта на життя (шапка покаже % доходу)'],
+  ['Інвестиції', CAT_INVEST, 2000, 26, 'щомісяця', 0, 0, 'ОВДП, фонд чи інше: окремо від заощаджень'],
   ['Щомісячний донат', 'Благодійність', 500, 1, 'щомісяця', 0, 0, ''],
 ];
 
 function buildRegular_(ss) {
   const sh = ensureSize_(sheetOf_(ss, REG_SHEET), REG_LAST + 3, REG_COLS.length);
-  sh.getRange(1, 1).setValue('🔁 Регулярні платежі й надходження').setFontWeight('bold').setFontSize(14);
-  sh.getRange(2, 1).setValue('Кожен рядок стає планом «🔁 план регулярний» у журналі до кінця наступного місяця. Прийшов факт тієї ж категорії ' +
-    '(±5 днів, ±25 % суми), наприклад з банку: план місяця закривається сам. Щокварталу й щороку: від місяця з колонки «З».').setFontColor('#5f6368').setWrap(true);
   sh.getRange(REG_HEAD, 1, 1, REG_COLS.length).setValues([REG_COLS]).setFontWeight('bold').setWrap(true)
     .setBackground(HDR_HEAD_BG).setFontColor(HDR_HEAD_FG).setHorizontalAlignment('center').setVerticalAlignment('middle');
   const rng = c => sh.getRange(c + REG_FIRST + ':' + c + REG_LAST), V = () => SpreadsheetApp.newDataValidation();
@@ -68,6 +70,7 @@ function buildRegular_(ss) {
   sh.setFrozenRows(REG_HEAD);
   sh.setColumnWidth(1, 180); sh.setColumnWidth(2, 160); sh.setColumnWidth(10, 320);
   regExamplesAdd_(ss);
+  regHeader_(ss);
   return sh;
 }
 
@@ -91,10 +94,161 @@ function regExamplesAdd_(ss) {
     sh.getRange(REG_FIRST + i, 1, 1, 9).setValues([[x[0], x[1], x[2], x[3], per, from, to, '', MOD_NO]]);
     sh.getRange(REG_FIRST + i, 1).setNote(REG_EX_MARK + ' шаблону' + (x[7] ? ': ' + x[7] : '') + '. Свій: поправте й поставте «так».');
   });
-  sh.getRange(3, 1).setValue(REG_HINT).setFontColor('#1a73e8').setFontWeight('bold');
   dp.setProperty('reg_ex', '1');
   if (ss.getSheetByName(JOURNAL)) regPlansSync_(ss);                // «Стан»: підказки прикладів
   return ex.length;
+}
+
+/** Нові приклади для таблиць, де приклади вже додавали (версія 18): «Заплати собі» й «Інвестиції», якщо таких рядків ще немає. → додано */
+function regExamplesMore_(ss) {
+  const sh = ss.getSheetByName(REG_SHEET), dp = PropertiesService.getDocumentProperties();
+  if (!sh || dp.getProperty('reg_ex2')) return 0;
+  const dict = ss.getSheetByName(DICT_SHEET), cats = new Set(dict ? dict.getRange(D_FIRST, 1, D_LAST - D_FIRST + 1, 1).getValues().map(r => String(r[0]).trim()) : []);
+  const v = sh.getRange(REG_FIRST, 1, REG_LAST - REG_FIRST + 1, 2).getValues(), names = v.map(r => String(r[0]).trim()), used = v.map(r => String(r[1]).trim());
+  const add = REG_EXAMPLES.filter(x => (x[1] === CAT_SELF || x[1] === CAT_INVEST) && cats.has(x[1]) && names.indexOf(x[0]) < 0 && used.indexOf(x[1]) < 0);
+  let n = 0;
+  add.forEach(x => {
+    const i = names.findIndex(s => !s);
+    if (i < 0) return;
+    sh.getRange(REG_FIRST + i, 1, 1, 9).setValues([[x[0], x[1], x[2], x[3], x[4], '', '', '', MOD_NO]]);
+    sh.getRange(REG_FIRST + i, 1).setNote(REG_EX_MARK + ' шаблону: ' + x[7] + '. Свій: поправте й поставте «так».');
+    names[i] = x[0]; n++;
+  });
+  dp.setProperty('reg_ex2', '1');
+  if (n && ss.getSheetByName(JOURNAL)) regPlansSync_(ss);
+  return n;
+}
+
+/* ---------- шапка: плитки в стилі Grafana (рядки 1–3) ---------- */
+
+const RH = { per: 'N', type: 'O', days: 'Q', lab: 'R', val: 'S', opt: 'T', last: 'U' };   // службові колонки (сховані)
+const RH_DAYS = 30, RH_TILES = 6;
+const REG_NOTE_A = 'Кожен рядок стає планом «🔁 план регулярний» у журналі до кінця наступного місяця. Прийшов факт тієї ж категорії ' +
+  '(±5 днів, ±25 % суми), наприклад з банку: план місяця закривається сам. Щокварталу й щороку: від місяця з колонки «З». ' + REG_HINT;
+/** Підсумки шапки (S1…S27): [рядок, підпис, формула]. Колонки: N на місяць, O тип, J стан. */
+function regHeaderVals_(debtsOn) {
+  const R = c => '$' + c + '$' + REG_FIRST + ':$' + c + '$' + REG_LAST, N = R(RH.per), O = R(RH.type), JR = J_RANGE;
+  const m0 = '(EOMONTH(TODAY(),-1)+1)', m1 = 'EOMONTH(TODAY(),0)', tag = '"' + REG_TAG + '*"';
+  const B = c => "'" + DEBTS_SHEET + "'!$" + c + '$' + DEBT_FIRST + ':$' + c + '$' + DEBT_LAST, S = k => '$' + RH.val + '$' + k;
+  return [
+    [1, 'доходи на місяць', '=SUMIFS(' + N + ',' + O + ',"' + T_IN + '")'],
+    [2, 'собі й заощадження', '=SUMIFS(' + N + ',' + R('B') + ',"' + CAT_SELF + '")+SUMIFS(' + N + ',' + R('B') + ',"Заощадження")'],
+    [3, 'інвестиції', '=SUMIFS(' + N + ',' + R('B') + ',"' + CAT_INVEST + '")'],
+    [4, 'собі й інвестиції', '=' + S(2) + '+' + S(3)],
+    [5, 'регулярні витрати', '=SUM(' + N + ')-' + S(1) + '-' + S(4)],
+    [6, 'платежі боргів на місяць', debtsOn ? '=SUMIFS(' + B('D') + ',' + B('B') + ',"' + DEBT_OWE + '",' + B('J') + ',">0")' : 0],
+    [7, 'обов\'язкові (витрати + борги)', '=' + S(5) + '+' + S(6)],
+    [8, 'лишається', '=' + S(1) + '-' + S(7) + '-' + S(4)],
+    [9, 'частка обов\'язкових', '=IF(' + S(1) + '>0,' + S(7) + '/' + S(1) + ',0)'],
+    [10, 'увімкнено', '=COUNTIFS(' + R('A') + ',"<>",' + R('I') + ',"так")'],
+    [11, 'з них витрат', '=COUNTIFS(' + R('A') + ',"<>",' + R('I') + ',"так",' + O + ',"<>' + T_IN + '")'],
+    [12, 'з них доходів', '=' + S(10) + '-' + S(11)],
+    [13, 'прикладів', '=COUNTIF(' + R('J') + ',"💡*")'],
+    [14, 'сплачено цього місяця', '=COUNTIF(' + R('J') + ',"✓*")'],
+    [15, 'ще планів цього місяця', '=COUNTIFS(' + JR(JC.note) + ',' + tag + ',' + JR(JC.state) + ',1,' + JR(JC.date) + ',">="&' + m0 + ',' + JR(JC.date) + ',"<="&' + m1 + ')'],
+    [16, 'ще сума цього місяця', '=SUMIFS(' + JR(JC.plan) + ',' + JR(JC.note) + ',' + tag + ',' + JR(JC.date) + ',">="&' + m0 + ',' + JR(JC.date) + ',"<="&' + m1 + ')'],
+    [17, 'прострочено', '=COUNTIF(' + R('J') + ',"*прострочено*")'],
+    [18, 'найближча дата', '=MINIFS(' + JR(JC.date) + ',' + JR(JC.note) + ',' + tag + ',' + JR(JC.state) + ',1,' + JR(JC.date) + ',">="&TODAY())'],
+    [19, 'найближчий: коментар', '=IF(' + S(18) + '=0,"",IFERROR(INDEX(FILTER(' + JR(JC.note) + ',' + JR(JC.date) + '=' + S(18) + ',' + JR(JC.state) + '=1,LEFT(' + JR(JC.note) + ',' + REG_TAG.length + ')="' + REG_TAG + '"),1),""))'],
+    [20, 'найближчий: назва', '=IFERROR(MID(' + S(19) + ',' + (REG_TAG.length + 1) + ',FIND(":",' + S(19) + ')-' + (REG_TAG.length + 1) + '),"")'],
+    [21, 'найближчий: сума', '=IF(' + S(18) + '=0,0,SUMIFS(' + JR(JC.plan) + ',' + JR(JC.note) + ',' + tag + ',' + JR(JC.date) + ',' + S(18) + '))'],
+    [22, '30 днів: сума', '=SUM($' + RH.days + '$' + REG_FIRST + ':$' + RH.days + '$' + (REG_FIRST + RH_DAYS - 1) + ')'],
+    [23, 'залишок боргів', debtsOn ? '=SUMIFS(' + B('J') + ',' + B('B') + ',"' + DEBT_OWE + '")' : 0],
+    [24, 'ліміт частинами: вільно', debtsOn ? "=IF('" + DEBTS_SHEET + "'!$B$" + DEBT_LIMITS[0].row + '="","",\'' + DEBTS_SHEET + "'!$E$" + DEBT_LIMITS[0].row + ')' : ''],
+    [26, 'смужка: обов\'язкові', '=' + S(7)],
+    [27, 'смужка: решта доходу', '=MAX(0,' + S(1) + '-' + S(7) + ')'],
+  ];
+}
+
+/** Шапка «Регулярних»: рядки 1–3 (A…J, з модулем боргів ще K:L), службові N…U. Ваші рядки з 5-го не чіпає. */
+function regHeader_(ss) {
+  const sh = ss.getSheetByName(REG_SHEET);
+  if (!sh) return false;
+  const last = colNum_(RH.last), debtsOn = modOn_('debts') && !!ss.getSheetByName(DEBTS_SHEET);
+  ensureSize_(sh, REG_LAST, last);
+  const top = sh.getRange(1, 1, 3, colNum_('L'));
+  top.breakApart();
+  top.setValues([0, 1, 2].map(() => Array(colNum_('L')).fill('')));
+  [1, 2, 3].forEach(r => sh.getRange(r, 1).setNote(''));
+  top.setBackground(DK.bg).setFontColor(DK.text).setFontWeight('normal').setFontSize(10).setWrap(false).setVerticalAlignment('middle').setHorizontalAlignment('left');
+  // службові: на місяць (N), тип (O), 30 днів (Q), підсумки (R:S), параметри графіків (T:U)
+  const per = [], typ = [], days = [];
+  for (let r = REG_FIRST; r <= REG_LAST; r++) {
+    per.push(['=IF(OR($A' + r + '="",$I' + r + '<>"так",N($C' + r + ')<=0,AND($G' + r + '<>"",N($G' + r + ')<TODAY())),0,N($C' + r + ')*IF($E' + r + '="' + REG_PER[1] + '",1/3,IF($E' + r + '="' + REG_PER[2] + '",1/12,1)))']);
+    typ.push(['=IF($B' + r + '="","",IFERROR(VLOOKUP($B' + r + ',\'' + DICT_SHEET + '\'!$A$' + D_FIRST + ':$B$' + D_LAST + ',2,FALSE),""))']);
+  }
+  for (let k = 0; k < RH_DAYS; k++) {
+    const day = 'TODAY()+' + k;
+    days.push(['=SUMIFS(' + J_RANGE(JC.plan) + ',' + J_RANGE(JC.note) + ',"' + REG_TAG + '*",' + J_RANGE(JC.date) + ',' + day + ')+SUMIFS(' + J_RANGE(JC.plan) + ',' +
+      J_RANGE(JC.note) + ',"' + DEBT_TAG + '*",' + J_RANGE(JC.date) + ',' + day + ')']);
+  }
+  setF_(sh.getRange(REG_FIRST, colNum_(RH.per), per.length, 1), per);
+  setF_(sh.getRange(REG_FIRST, colNum_(RH.type), typ.length, 1), typ);
+  setF_(sh.getRange(REG_FIRST, colNum_(RH.days), days.length, 1), days);
+  sh.getRange(REG_HEAD, colNum_(RH.per), 1, 4).setValues([['на місяць', 'тип', '', 'платежі по днях (30)']]);
+  sh.getRange(1, colNum_(RH.lab), 27, 2).clearContent();
+  regHeaderVals_(debtsOn).forEach(v => {
+    sh.getRange(v[0], colNum_(RH.lab)).setValue(v[1]);
+    dashPut_(sh.getRange(v[0], colNum_(RH.val)), v[2]);
+  });
+  const S = k => '$' + RH.val + '$' + k, O = (r, rows) => sh.getRange(r, colNum_(RH.opt), rows.length, 2).setValues(rows);
+  const T = (r, n) => '$' + RH.opt + '$' + r + ':$' + RH.last + '$' + (r + n - 1);
+  O(1, [['charttype', 'bar'], ['max', ''], ['color1', DKC.violet], ['color2', DKC.blue]]);
+  dashPut_(sh.getRange(2, colNum_(RH.last)), '=MAX(' + S(1) + ',' + S(4) + ',1)');
+  O(6, [['charttype', 'bar'], ['max', ''], ['color1', DKC.red], ['color2', DKC.green]]);
+  dashPut_(sh.getRange(7, colNum_(RH.last)), '=MAX(' + S(1) + ',' + S(7) + ',1)');
+  O(11, [['charttype', 'bar'], ['max', ''], ['color1', DKC.green], ['color2', DK.lineHead]]);
+  dashPut_(sh.getRange(12, colNum_(RH.last)), '=MAX(' + S(14) + '+' + S(15) + ',1)');
+  O(16, [['charttype', 'column'], ['color', DKC.orange], ['ymin', 0]]);
+  sh.hideColumns(colNum_(RH.per), last - colNum_(RH.per) + 1);
+  // плитки
+  const money = x => 'TEXT(' + x + ',"#,##0")&" ₴"', tiles = [
+    { c: 1, color: DKC.violet,
+      t: '="💰 СОБІ Й ІНВЕСТИЦІЇ / МІС · СОБІ "&TEXT(' + S(2) + ',"#,##0")&" · ІНВЕСТ. "&TEXT(' + S(3) + ',"#,##0")',
+      big: '=' + money(S(4)) + '&IF(' + S(1) + '>0,"  ·  "&TEXT(' + S(4) + '/' + S(1) + ',"0%")&" доходу","")',
+      sub: '=IF(' + S(4) + '=0,"Додайте «' + CAT_SELF + '» чи «' + CAT_INVEST + '» нижче (є приклади з «ні»)",SPARKLINE($' + RH.val + '$2:$' + RH.val + '$3,' + T(1, 4) + '))' },
+    { c: 3, color: DKC.blue, t: '🔁 ПІДКЛЮЧЕНО РЕГУЛЯРНИХ', big: '=' + S(10),
+      sub: '="💸 "&' + S(11) + '&" витрат · 💵 "&' + S(12) + '&" доходів"&IF(' + S(13) + '>0," · 💡 "&' + S(13) + '&" прикладів","")' },
+    { c: 5, color: DKC.green, t: '="💵 ЛИШАЄТЬСЯ / МІС"&IF(' + S(1) + '>0," · ОБОВ\'ЯЗКОВІ "&TEXT(' + S(9) + ',"0%"),"")', big: '=' + S(8), fmt: F_MONEY,
+      sub: '=IF(' + S(1) + '=0,"Додайте дохід («Зарплата») нижче",SPARKLINE($' + RH.val + '$26:$' + RH.val + '$27,' + T(6, 4) + '))' },
+    { c: 7, color: DKC.amber, t: '="📅 ЦЕЙ МІСЯЦЬ · ЩЕ "&' + money(S(16)) + '&IF(' + S(17) + '>0," · ⚠️ "&' + S(17) + '&" ПРОСТРОЧЕНО","")',
+      big: '=' + S(14) + '&" / "&(' + S(14) + '+' + S(15) + ')&" ✓"',
+      sub: '=IF(' + S(14) + '+' + S(15) + '=0,"Цього місяця регулярних немає",SPARKLINE($' + RH.val + '$14:$' + RH.val + '$15,' + T(11, 4) + '))' },
+    { c: 9, color: DKC.orange, t: '="⏭ 30 ДНІВ · НАЙБЛИЖЧИЙ: "&IF(' + S(18) + '=0,"НЕМАЄ",' + S(20) + '&" "&TEXT(' + S(18) + ',"dd.mm")&" · "&' + money(S(21)) + ')',
+      big: '=' + S(22), fmt: F_MONEY,
+      sub: '=SPARKLINE($' + RH.days + '$' + REG_FIRST + ':$' + RH.days + '$' + (REG_FIRST + RH_DAYS - 1) + ',' + T(16, 3) + ')' },
+  ];
+  if (debtsOn) tiles.push({ c: 11, color: DKC.pink, t: '💳 БОРГИ Й ЧАСТИНАМИ / МІС', big: '=' + S(6), fmt: F_MONEY,
+    sub: '="залишок "&' + money(S(23)) + '&IF(' + S(24) + '="",""," · ліміт вільно "&' + money(S(24)) + ')' });
+  tiles.forEach(x => {
+    const box = sh.getRange(1, x.c, 3, 2);
+    box.setBackground(DK.tile).setBorder(true, true, true, true, null, null, DK.bg, dashThick_());
+    [1, 2, 3].forEach(r => sh.getRange(r, x.c, 1, 2).merge());
+    dashPut_(sh.getRange(1, x.c), x.t);
+    dashPut_(sh.getRange(2, x.c), x.big);
+    dashPut_(sh.getRange(3, x.c), x.sub);
+    sh.getRange(1, x.c).setFontSize(8).setFontWeight('bold').setFontColor(DK.muted);
+    sh.getRange(2, x.c).setFontSize(18).setFontWeight('bold').setFontColor(x.color).setNumberFormat(x.fmt || F_NUM);
+    sh.getRange(3, x.c).setFontSize(9).setFontColor(DK.muted);
+  });
+  sh.setRowHeight(1, 22); sh.setRowHeight(2, 40); sh.setRowHeight(3, 26);
+  // колір «лишається» нижче нуля: червоний (наші правила лише в рядках 1–3)
+  const ours = r => { try { return r.getRanges().every(g => g.getLastRow() <= 3); } catch (e) { return false; } };
+  const keep = sh.getConditionalFormatRules().filter(r => !ours(r));
+  sh.setConditionalFormatRules([SpreadsheetApp.newConditionalFormatRule().whenNumberLessThan(0).setFontColor(DKC.red).setRanges([sh.getRange('E2:F2')]).build(),
+    SpreadsheetApp.newConditionalFormatRule().whenTextContains('⚠️').setFontColor(DKC.red).setRanges([sh.getRange('G1:H1')]).build()].concat(keep));
+  // пояснення: примітки на заголовках
+  sh.getRange(REG_HEAD, 1).setNote(REG_NOTE_A);
+  sh.getRange(REG_HEAD, 9).setNote('«так»: правило ставить плани. «ні»: нічого не планує (так стоять приклади шаблону).');
+  sh.getRange(REG_HEAD, 10).setNote('Пише скрипт: наступний платіж, сплачено цього місяця, прострочено. Шапка вгорі рахує з цієї колонки.');
+  return true;
+}
+
+/** Шапка «Регулярних» нового вигляду? (крок 18) */
+function regHeaderNew_(ss) {
+  const sh = ss.getSheetByName(REG_SHEET);
+  return !!sh && sh.getMaxColumns() >= colNum_(RH.last) && String(sh.getRange(10, colNum_(RH.lab)).getValue()) === 'увімкнено' &&
+    String(sh.getRange(REG_FIRST, colNum_(RH.per)).getFormula()).indexOf('=IF(OR($A' + REG_FIRST) === 0;
 }
 
 /** Ваші правила: без вимкнених прикладів шаблону. */

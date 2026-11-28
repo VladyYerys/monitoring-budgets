@@ -22,7 +22,7 @@ const DICT_START = [
   ['Розваги', T_SPEND, '🎉 Розваги й подарунки'], ['Подарунки', T_SPEND, '🎉 Розваги й подарунки'], ['Подорожі', T_SPEND, '🎉 Розваги й подарунки'],
   ['Підписки', T_SPEND, '📱 Підписки й навчання', '🔁 Підписки'], ['Навчання', T_SPEND, '📱 Підписки й навчання'],
   ['Благодійність', T_SPEND, '🤝 Благодійність'], ['Інші витрати', T_SPEND, '📦 Інше'],
-  ['Заощадження', T_SAVE, '💰 Заощадження'], ['Резерв на податки', T_SAVE, '💰 Заощадження'],
+  ['Заощадження', T_SAVE, '💰 Заощадження'], [CAT_SELF, T_SAVE, '💰 Заощадження'], [CAT_INVEST, T_SAVE, '💰 Заощадження'], ['Резерв на податки', T_SAVE, '💰 Заощадження'],
   ['Єдиний податок', T_TAX, '🧾 ФОП і податки'], ['ЄСВ', T_TAX, '🧾 ФОП і податки'], ['Військовий збір', T_TAX, '🧾 ФОП і податки'],
   ['Кредит / розстрочка', T_DEBT, '💳 Борги'], ['Повернення боргу', T_DEBT, '💳 Борги'], ['Комісії й відсотки банку', T_DEBT, '💳 Борги', '🏦 Банківські комісії'],
   ['Зарплата', T_IN, '💵 Надходження', '', MINE_IN], ['Дохід ФОП', T_IN, '💵 Надходження', '', MINE_IN],
@@ -71,6 +71,20 @@ function dictWhoRule_(ss, sh) {
   const set = ss.getSheetByName(SETTINGS_SHEET);
   if (set) sh.getRange('G' + D_FIRST + ':G' + D_LAST).setDataValidation(SpreadsheetApp.newDataValidation()
     .requireValueInRange(set.getRange('B' + SET_MEMBERS_FIRST + ':B' + (SET_MEMBERS_FIRST + SET_MEMBERS_N - 1))).setAllowInvalid(true).build());
+}
+
+/** Оновлення «Довідника» (версія 18): категорії «Заплати собі» й «Інвестиції» (тип «Заощадження») у вільні рядки; ваші не чіпає. */
+function dictSelfInvest_(ss) {
+  const sh = ss.getSheetByName(DICT_SHEET), out = [];
+  if (!sh) return out;
+  const names = sh.getRange(D_FIRST, 1, D_LAST - D_FIRST + 1, 1).getValues().map(r => String(r[0]).trim());
+  [[CAT_SELF, T_SAVE, '💰 Заощадження'], [CAT_INVEST, T_SAVE, '💰 Заощадження']].forEach(c => {
+    if (names.indexOf(c[0]) >= 0) return;
+    const free = names.findIndex(n => !n);
+    if (free < 0) { out.push('⚠️ у «' + DICT_SHEET + '» немає вільного рядка для «' + c[0] + '»'); return; }
+    sh.getRange(D_FIRST + free, 1, 1, 3).setValues([c]); names[free] = c[0]; out.push('категорія «' + c[0] + '»');
+  });
+  return out;
 }
 
 /** Оновлення наявного «Довідника» (версія 5): колонка «Чий бюджет» і нові службові категорії; ваші рядки не змінюються. */

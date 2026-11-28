@@ -154,6 +154,7 @@ const MOD_APPLY = {
     sheetShow_(ss, DEBTS_SHEET, on);                                // на виду з модулем: покупки частинами, розстрочки, ліміти
     mainRowsShow_(ss, MAIN_DEBTS, on);
     if (headerIsNew_(ss)) headerParts_(ss);                         // шапка журналу: борги місяця й ліміт частинами
+    if (ss.getSheetByName(REG_SHEET)) regHeader_(ss);               // шапка «Регулярних»: плитка «Борги»
     const st = debtsPlansSync_(ss);
     return (on ? 'увімкнено ✓: аркуш «' + DEBTS_SHEET + '» на виду (покупки частинами, розстрочки, ліміти)' : 'вимкнено: аркуш сховано') + (st.added + st.removed ? ', планів у журналі +' + st.added + ' −' + st.removed : '');
   },
