@@ -19,6 +19,11 @@
  * менша за повернення, до 60 днів тому. Рядок: категорія покупки, сума з мінусом («Одяг −1 200»), коментар «↩ повернення за покупку 12.11».
  * Немає покупки: категорія з правила для магазину; немає й правила: чернетка без категорії. Без слова: завжди чернетка (перевірте).
  * «Скасування … в обробці» за вже списаною покупкою: чернетка «⏳ в обробці» (сама стане фактом); за ще не списаною чи невідомою: пропуск, як і раніше.
+ * Покупка частинами й розстрочка (версія 0.5.4, модуль «🤝 Борги й розстрочки»): «Платіж МАГАЗИН - monomarket» (перший платіж),
+ * «Погашення МАГАЗИН - monomarket», «Повне погашення МАГАЗИН - monomarket» чи «Повне погашення» (розстрочка на картку).
+ * Рядок «Боргів» шукаємо за «Назвою в банку» чи назвою; план цього боргу ±10 днів закривається незалежно від категорії й суми;
+ * без плану: факт з категорією боргу й коментарем «[Борг] Назва: мм.рррр» (іде в «Сплачено»). Рядка немає: перший платіж
+ * (чи перше погашення) додає його на «Борги» (сума боргу порожня: її впише людина). «Повне погашення»: «Закрито» = дата.
  * Номер операції має приставку джерела: Mono без приставки, «pb:» ПриватБанк, «csv:» виписка.
  * * «Рахунки»: назва · банк · чий · вид (основна картка / інша картка / рахунок ФОП) · ФОП · ключ (відбиток, без номерів) · останній імпорт.
  * Основна картка: з неї «Дні» й контрольні точки. Інші картки сім'ї: у «мої» й «Місяці». Рахунок ФОП: лише «ФОП».
@@ -104,11 +109,12 @@ function srcOf_(id) { id = String(id || ''); return id.indexOf('csv:') === 0 ? '
  */
 function bankIngest_(ss, src) {
   const sh = ss.getSheetByName(JOURNAL), bankSh = ss.getSheetByName(BANK_SHEET), tz = ss.getSpreadsheetTimeZone();
-  const journal = readJournal_(ss);
+  const journal = readJournal_(ss), debtsOn = modOn_('debts') && !!ss.getSheetByName(DEBTS_SHEET);
   const lastLog = bankSh.getLastRow();
   const logged = new Set(lastLog >= BANK_LOG_FIRST ? bankSh.getRange(BANK_LOG_FIRST, 2, lastLog - BANK_LOG_FIRST + 1, 1).getValues().map(r => String(r[0])) : []);
   const plan = planImport_({ items: src.items, pending: src.pending, journal: journal, logged: logged, rules: readRules_(ss), dateOf: src.dateOf, timeOf: src.timeOf,
-    balShift: src.balShift, coverFrom: src.coverFrom, coverTo: src.coverTo, acc: src.acc, src: src.src || 'mono', types: catTypes_(ss), autoFact: autoFact_(ss) });
+    balShift: src.balShift, coverFrom: src.coverFrom, coverTo: src.coverTo, acc: src.acc, src: src.src || 'mono', types: catTypes_(ss), autoFact: autoFact_(ss),
+    debts: debtsOn ? debtsAll_(ss) : null });
   (src.extraLog || []).forEach(l => { if (!logged.has(l[0])) plan.log.push(l); });
   const w = writeDrafts_(sh, journal, plan, tz, src.acc);
   plan.vanish.forEach(row => {
@@ -121,7 +127,8 @@ function bankIngest_(ss, src) {
     ensureSize_(bankSh, at + logRows.length, BANK_LOG_N).getRange(at, 1, logRows.length, BANK_LOG_N).setValues(logRows);
   }
   accTouch_(ss, src.acc);
-  return { plan: plan, written: w.written, lost: w.lost, taken: w.taken };
+  const debts = debtsOn ? debtsFromBank_(ss, plan) : { added: [], closed: [] };
+  return { plan: plan, written: w.written, lost: w.lost, taken: w.taken, debts: debts };
 }
 
 function isPendingReversal_(it) {
@@ -165,6 +172,46 @@ function findOtherSource_(journal, claimed, id, amt, key, accName) {
   const src = srcOf_(id);
   return journal.find(r => r.bank && r.bank[0] && !claimed[r.row] && srcOf_(r.bank[0]) !== src && r.key &&
     Math.abs(Number(r.bank[2]) - amt) < 0.005 && Math.abs(dayDiff_(r.key, key)) <= 1 && (r.acct === accName || (!r.acct && !accName))) || null;
+}
+
+/* ---------- покупка частинами й розстрочка ---------- */
+
+const PARTS_DAYS = 10;
+/** Чиста функція: платіж частинами з опису Mono. → null | { kind: 'first' | 'pay' | 'final', shop, mono } */
+function partsOf_(desc) {
+  const s = String(desc || '').replace(/\s+/g, ' ').trim(), mono = /\s-\s*monomarket$/i.test(s), body = s.replace(/\s-\s*monomarket$/i, '').trim();
+  let m = body.match(/^повне погашення(?:\s+(.+))?$/i);
+  if (m) return { kind: 'final', shop: (m[1] || '').trim(), mono: mono };
+  m = body.match(/^погашення(?:\s+(.+))?$/i);
+  if (m) return { kind: 'pay', shop: (m[1] || '').trim(), mono: mono };
+  m = body.match(/^платіж\s+(.+)$/i);
+  if (m && mono) return { kind: 'first', shop: m[1].trim(), mono: true };
+  return null;
+}
+
+/** Чиста функція: рядок «Боргів» для платежу: за «Назвою в банку» чи назвою; без магазину: єдина відкрита розстрочка з таким платежем. */
+function partsDebt_(debts, pt, abs) {
+  const list = (debts || []).filter(d => !d.closed && d.dir === DEBT_OWE);
+  if (pt.shop) {
+    const s = refundShop_(pt.shop), same = x => { const t = refundShop_(x); return !!t && (t === s || (t.length >= 3 && s.length >= 3 && (t.indexOf(s) === 0 || s.indexOf(t) === 0))); };
+    return list.find(d => d.bank && same(d.bank)) || list.find(d => same(d.name)) || null;
+  }
+  const c = list.filter(d => d.kind === DEBT_INST && d.monthly > 0 && Math.abs(d.monthly - abs) <= Math.max(1, abs * 0.05));
+  return c.length === 1 ? c[0] : null;
+}
+
+/** Чиста функція: план боргу в журналі. Відомий борг: його план ±10 днів (будь-яка сума); невідомий: план «[Борг] …» ±5 днів і ±1 % суми. */
+function partsPlan_(journal, claimed, abs, key, debt) {
+  let best = null, bestS = 0;
+  journal.forEach(r => {
+    if (claimed[r.row] || !isPlan_(r.e) || !r.key || String(r.d).indexOf(DEBT_TAG) !== 0) return;
+    const dd = Math.abs(dayDiff_(r.key, key)), diff = Math.abs(Number(r.b) - abs);
+    if (debt) { if (String(r.d).indexOf(DEBT_TAG + debt.name + ':') !== 0 || dd > PARTS_DAYS) return; }
+    else if (dd > PLAN_DAYS || diff > Math.max(1, abs * 0.01)) return;
+    const sc = dd * 1e6 + diff;
+    if (!best || sc < bestS) { best = r; bestS = sc; }
+  });
+  return best;
 }
 
 /* ---------- повернення за покупку ---------- */
@@ -275,7 +322,8 @@ function histGuess_(hist, amt, desc) {
 function planImport_(ctx) {
   const acc = ctx.acc || { name: '', kind: K_MAIN, who: '' };
   const out = { drafts: [], marks: [], takes: [], recats: [], updates: [], log: [], vanish: [],
-    stats: { transfers: 0, uncategorized: 0, changed: 0, resized: 0, redated: 0, other: 0, own: 0, plans: 0, learned: 0, facts: 0, refunds: 0, skipped: 0 } };
+    newDebts: [], closeDebts: [],
+    stats: { transfers: 0, uncategorized: 0, changed: 0, resized: 0, redated: 0, other: 0, own: 0, plans: 0, learned: 0, facts: 0, refunds: 0, skipped: 0, parts: 0 } };
   const HOLD_NOTE = ' · ⏳ в обробці', statusOf = (cat, hold) => ctx.autoFact && !hold && !looseCat_(cat) ? STATUS_FACT : STATUS_DRAFT;
   const hist = histMap_(ctx.journal), pairClaimed = {}, planClaimed = {};
   const mine = r => r.acct === acc.name || (!r.acct && acc.kind === K_MAIN);
@@ -339,6 +387,37 @@ function planImport_(ctx) {
       return;
     }
     const ts = Number(it.time) * 1000 || '';
+    const pt = amt < 0 && !it._fee ? partsOf_(it.description) : null;
+    if (pt) {                                                             // платіж частинами чи за розстрочкою: рядок «Боргів», його план
+      const known = partsDebt_((ctx.debts || []).concat(out.newDebts), pt, abs), note0 = noteFor_(it, amt);
+      const pl = partsPlan_(ctx.journal, planClaimed, abs, key, known);
+      out.stats.parts++;
+      if (pl) {
+        planClaimed[pl.row] = 1; out.stats.plans++;
+        const e = statusOf(pl.c, it.hold);
+        if (e === STATUS_FACT) out.stats.facts++;
+        const log = base.concat(['💳 платіж частинами: план закрито (' + pl.d.slice(0, 40) + ')', pl.row]);
+        out.takes.push({ row: pl.row, key: key, b: abs, c: pl.c, d: pl.d + ' · ' + note0, e: e, bank: bank, ts: ts, log: log });
+        out.log.push(log);
+      } else {
+        let debt = known;
+        if (!debt && ctx.debts && pt.shop && pt.kind !== 'final') {          // нова покупка частинами чи розстрочка: рядок на «Борги»
+          debt = { row: null, name: pt.shop.slice(0, 60).replace(/[*?]/g, ''), bank: pt.shop, dir: DEBT_OWE, monthly: abs, day: Math.min(28, Number(key.slice(8, 10))),
+            from: key, kind: pt.mono ? DEBT_PARTS : DEBT_INST, cat: CAT_PARTS, closed: '', who: acc.who || '' };
+          out.newDebts.push(debt);
+        }
+        const c = debt ? debt.cat : CAT_PARTS, e = statusOf(c, it.hold);
+        if (e === STATUS_FACT) out.stats.facts++;
+        const d = (debt && ctx.debts ? DEBT_TAG + debt.name + ': ' + key.slice(5, 7) + '.' + key.slice(0, 4) + ' · ' : '') + note0;
+        const log = base.concat([(e === STATUS_FACT ? '✅ факт' : 'чернетка') + ' 💳 платіж частинами → ' + c + (debt ? ' («' + debt.name + '»' + (debt.row ? '' : ', новий рядок на «' + DEBTS_SHEET + '»') + ')' : ''), '']);
+        out.drafts.push({ key: key, b: abs, c: c, d: d, e: e, f: '', g: acc.who || '', bank: bank, log: log, ts: ts });
+        out.log.push(log);
+        if (pt.kind === 'final' && debt) out.closeDebts.push({ row: debt.row, name: debt.name, key: key });
+        return;
+      }
+      if (pt.kind === 'final' && known) out.closeDebts.push({ row: known.row, name: known.name, key: key });
+      return;
+    }
     const rf = refundOf_(it, ctx.journal, key, refundClaimed, mine);
     if (rf) {                                                             // повернення за покупку: категорія покупки, сума з мінусом
       let cat = rf.buy ? rf.buy.c : '', why = rf.buy ? 'за покупку ' + dd_(rf.buy.key) : '';

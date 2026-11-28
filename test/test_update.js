@@ -99,7 +99,7 @@ t('move data: journal with bank fields, dictionary, rules, settings by label, de
   assert.strictEqual(set.getRange('B9').getValue(), K(c, 'TEMPLATE_VERSION'), 'версію не переносимо');
   const mods = JSON.parse(env.docProps.getProperty('mods'));
   assert.strictEqual(mods.debts, true, 'модулі за назвою'); assert.strictEqual(mods.credit, false); assert.strictEqual(mods.tg, true);
-  assert.strictEqual(env.ss.getSheetByName('Борги').isSheetHidden(), mods.service !== true, '«Борги» на виду лише з «🗂 Усі аркуші»: так');
+  assert.strictEqual(env.ss.getSheetByName('Борги').isSheetHidden(), false, '«Борги» на виду, поки модуль увімкнено (покупки частинами й ліміти)');
   assert.ok(/Підключіть заново/.test(d.html) && /Перевірка/.test(d.html));
   assert.strictEqual(snap(old), before, 'стара копія не змінилась');
   assert.ok(!env.userProps.getProperty('mono_token') && !env.userProps.getProperty('tg_token'), 'токени не переносяться');

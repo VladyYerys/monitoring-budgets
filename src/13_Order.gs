@@ -57,10 +57,11 @@ function ensureTickTriggers_(ss) {
   if (!hasTrigger_(TRG.edit)) ScriptApp.newTrigger(TRG.edit).forSpreadsheet(ss).onEdit().create();
 }
 
-/** Правка в журналі (A…H): упорядкувати за хвилину. Правка блоку «🧩 Модулі» («Налаштування»): застосувати одразу. */
+/** Правка в журналі (A…H): упорядкувати за хвилину. Правка блоку «🧩 Модулі» («Налаштування»): застосувати одразу. «так» у ліміті на «Боргах»: підтвердити. */
 function mbsEdit(e) {
   if (!e || !e.range || !quietOk_()) return;
   if (isModulesEdit_(e.range)) { try { modulesIfChanged_(e.range.getSheet().getParent()); } catch (x) { /* застосує mbsTick */ } return; }
+  if (isDebtLimitEdit_(e.range)) { try { debtLimitConfirm_(e.range.getSheet().getParent()); } catch (x) { /* «так» лишилось: спробуйте ще раз */ } return; }
   const name = e.range.getSheet().getName();
   if (name === REG_SHEET && e.range.getLastRow() >= REG_FIRST) { soonPlan_(SORT_SOON_MS); return; }
   if (name !== JOURNAL || e.range.getLastRow() < J_FIRST || e.range.getColumn() > J_INPUT_N) return;

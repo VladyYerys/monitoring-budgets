@@ -184,17 +184,18 @@ function rawRows_(items, rules, acc, timeOf, hist) {
     const amt = round2_(it.amount / 100), refund = amt > 0 && REFUND_RE.test(String(it.description || ''));
     const cz = refund ? { cat: REFUND_NOTE + ' (мінусом)', rule: null } : categorize_(it, amt, rules, acc), h = !cz.cat || cz.cat === CAT_TRANSFER ? histGuess_(hist || {}, amt, it.description) : null;
     const where = ['description', 'comment', 'counterName'].filter(k => RAW_SALARY.test(String(it[k] || '')));
-    const parts = RAW_PARTS.test(String(it.description || '') + ' ' + String(it.comment || ''));
+    const pt = partsOf_(it.description), parts = !!pt || RAW_PARTS.test(String(it.description || '') + ' ' + String(it.comment || ''));
     return { t: timeOf(it), amt: amt, desc: String(it.description || ''), comment: String(it.comment || ''), mcc: Number(it.mcc || 0), omcc: Number(it.originalMcc || 0),
       name: String(it.counterName || ''), code: rawCode_(it.counterEdrpou), iban: rawIban_(it.counterIban), hold: !!it.hold,
       cat: cz.cat || (h && h.cat) || '', why: refund ? 'категорія покупки з журналу (той самий магазин, до 60 днів)' : cz.rule ? 'правило: ' + cz.rule.text.slice(0, 30) + (cz.rule.text.length > 30 ? '…' : '') : h && h.cat ? 'історія: ' + h.text : isTransfer_(it) ? 'схоже на переказ' : cz.cat ? '' : 'немає правила',
-      salary: where, parts: parts ? (/погашенн/i.test(String(it.description || '')) ? 'погашення' : 'покупка?') : '' };
+      salary: where, parts: pt ? { first: 'перший платіж', pay: 'погашення', final: 'повне погашення' }[pt.kind] + (pt.shop ? ': ' + pt.shop : '') :
+        parts ? (/погашенн/i.test(String(it.description || '')) ? 'погашення' : 'покупка?') : '' };
   });
   const cnt = f => rows.filter(f).length, sal = rows.filter(r => r.salary.length);
   return { rows: rows, sum: {
     n: rows.length, comment: cnt(r => r.comment), name: cnt(r => r.name), code: cnt(r => r.code), iban: cnt(r => r.iban), omcc: cnt(r => r.omcc && r.omcc !== r.mcc),
     salary: sal.length, salaryIn: ['comment', 'description', 'counterName'].map(k => [k, sal.filter(r => r.salary.indexOf(k) >= 0).length]),
-    pay: cnt(r => r.parts === 'погашення'), buy: cnt(r => r.parts === 'покупка?'), none: cnt(r => !r.cat || r.cat === CAT_TRANSFER) } };
+    pay: cnt(r => !!r.parts && r.parts !== 'покупка?'), buy: cnt(r => r.parts === 'покупка?'), none: cnt(r => !r.cat || r.cat === CAT_TRANSFER) } };
 }
 
 /** HTML вікна: підсумок перевірок, пошук, таблиця. */
@@ -262,7 +263,7 @@ function monoRawNow() {
  */
 const PERIOD_MAX_MONTHS = 12, PERIOD_DEF_MONTHS = 3, PERIOD_SPAN = 31 * 86400, PERIOD_WAIT_MS = 65 * 1000, PERIOD_FAILS = 3;
 const PERIOD_T = '🗓 Імпорт з банку за період';
-const PERIOD_SUM = ['seen', 'drafts', 'facts', 'transfers', 'uncategorized', 'matched', 'other', 'pairs', 'plans', 'learned', 'fees', 'lost', 'refunds'];
+const PERIOD_SUM = ['seen', 'drafts', 'facts', 'transfers', 'uncategorized', 'matched', 'other', 'pairs', 'plans', 'learned', 'fees', 'lost', 'refunds', 'parts'];
 
 /** Чиста функція: та сама дата n місяців тому ('yyyy-MM-dd'); 31-ше в коротшому місяці → його останній день. */
 function monthsBack_(key, n) {
@@ -351,7 +352,7 @@ function periodEnd_(ss, job, err) {
 function periodSummary_(rep) {
   rep = rep || {};
   return 'нових операцій ' + (rep.drafts || 0) + (rep.facts ? ', з них одразу «✅ факт» ' + rep.facts : '') + (rep.transfers ? ', переказів ' + rep.transfers : '') +
-    (rep.uncategorized ? ', без категорії ' + rep.uncategorized : '') + (rep.refunds ? ', повернень ' + rep.refunds : '') + '; уже були в журналі: ' + ((rep.matched || 0) + (rep.other || 0)) +
+    (rep.uncategorized ? ', без категорії ' + rep.uncategorized : '') + (rep.refunds ? ', повернень ' + rep.refunds : '') + (rep.parts ? ', частинами ' + rep.parts : '') + '; уже були в журналі: ' + ((rep.matched || 0) + (rep.other || 0)) +
     '; операцій у виписках: ' + (rep.seen || 0) + (rep.lost ? '; ⚠️ не вмістилось: ' + rep.lost : '');
 }
 
@@ -535,14 +536,14 @@ function importBank_(ss) {
 
 function emptyReport_() {
   return { drafts: 0, lost: 0, transfers: 0, uncategorized: 0, matched: 0, other: 0, updated: 0, redated: 0, changed: 0, seen: 0, fees: 0, skipped: 0, vanished: 0,
-    pairs: 0, plans: 0, learned: 0, facts: 0, refunds: 0,
+    pairs: 0, plans: 0, learned: 0, facts: 0, refunds: 0, parts: 0, partsNew: [], partsClosed: [],
     checkpoints: [], own: null, limit: null, newOps: [], todayOps: { out: 0, inc: 0, n: 0 }, notes: [], accounts: [] };
 }
 
 function mergeReport_(rep, r) {
-  ['drafts', 'lost', 'transfers', 'uncategorized', 'matched', 'other', 'updated', 'redated', 'changed', 'seen', 'fees', 'skipped', 'vanished', 'pairs', 'plans', 'learned', 'facts', 'refunds']
+  ['drafts', 'lost', 'transfers', 'uncategorized', 'matched', 'other', 'updated', 'redated', 'changed', 'seen', 'fees', 'skipped', 'vanished', 'pairs', 'plans', 'learned', 'facts', 'refunds', 'parts']
     .forEach(k => { rep[k] = (rep[k] || 0) + (r[k] || 0); });
-  ['checkpoints', 'newOps', 'notes', 'accounts'].forEach(k => { rep[k] = rep[k].concat(r[k] || []); });
+  ['checkpoints', 'newOps', 'notes', 'accounts', 'partsNew', 'partsClosed'].forEach(k => { rep[k] = (rep[k] || []).concat(r[k] || []); });
   ['out', 'inc', 'n'].forEach(k => { rep.todayOps[k] = round2_(rep.todayOps[k] + ((r.todayOps || {})[k] || 0)); });
   if (r.own !== null && r.own !== undefined) { rep.own = r.own; rep.limit = r.limit; }
   return rep;
@@ -553,7 +554,9 @@ function accReport_(acc, items, res, dateOf, today) {
   const p = res.plan, r = emptyReport_();
   Object.assign(r, { drafts: res.written + (res.taken || 0), lost: res.lost, transfers: p.stats.transfers, uncategorized: p.stats.uncategorized, matched: p.marks.length,
     other: p.stats.other, updated: p.stats.resized, redated: p.stats.redated, changed: p.stats.changed, seen: items.length, vanished: p.vanish.length, accounts: [acc.name],
-    pairs: p.stats.own || 0, plans: p.stats.plans || 0, learned: p.stats.learned || 0, facts: p.stats.facts || 0, refunds: p.stats.refunds || 0, skipped: p.stats.skipped || 0 });
+    pairs: p.stats.own || 0, plans: p.stats.plans || 0, learned: p.stats.learned || 0, facts: p.stats.facts || 0, refunds: p.stats.refunds || 0, skipped: p.stats.skipped || 0,
+    parts: p.stats.parts || 0, partsNew: (res.debts || {}).added || [], partsClosed: (res.debts || {}).closed || [] });
+  if ((res.debts || {}).full) r.notes.push('на «' + DEBTS_SHEET + '» немає вільних рядків для нової покупки частинами');
   const op = (d, cat) => ({ key: d.key, time: String(d.bank[4] || '').slice(11, 16), amt: Number(d.bank[2]) || 0, cat: cat || '', desc: String(d.bank[1] || ''), acc: acc.name });
   r.newOps = p.drafts.slice(0, res.written).map(d => op(d, d.c)).concat((p.takes || []).map(t => op(t, t.c)));
   items.forEach(it => { if (dateOf(it) !== today) return; const a = Number(it.amount) / 100; r.todayOps.n++;
@@ -693,7 +696,7 @@ function upsertCheckpoints_(ss, cps) {
 
 function importSummary_(r) {
   return 'нових операцій ' + r.drafts + (r.transfers ? ' (переказів ' + r.transfers + ')' : '') + (r.uncategorized ? ', без категорії ' + r.uncategorized : '') +
-    (r.facts ? ' · одразу «✅ факт» ' + r.facts : '') + (r.plans ? ' · закрито планів ' + r.plans : '') + (r.pairs ? ' · між своїми ' + r.pairs : '') + (r.learned ? ' · за історією ' + r.learned : '') + (r.refunds ? ' · повернень ' + r.refunds : '') +
+    (r.facts ? ' · одразу «✅ факт» ' + r.facts : '') + (r.plans ? ' · закрито планів ' + r.plans : '') + (r.pairs ? ' · між своїми ' + r.pairs : '') + (r.learned ? ' · за історією ' + r.learned : '') + (r.refunds ? ' · повернень ' + r.refunds : '') + (r.parts ? ' · частинами ' + r.parts : '') +
     ' · ваших рядків знайдено ' + r.matched + (r.other ? ' · з іншого джерела ' + r.other : '') + (r.lost ? ' · ⚠️ не вмістилось ' + r.lost : '') +
     (r.changed ? ' · ⚠️ розбіжностей сум ' + r.changed : '') + ((r.errors || []).length ? ' · ⚠️ ' + r.errors.join('; ') : '');
 }
@@ -708,6 +711,11 @@ function importReport_(r) {
   if (r.pairs) lines.push('Між своїми рахунками (пара сум на двох рахунках): <b>' + r.pairs + '</b>.');
   if (r.learned) lines.push('Категорія за історією (≥ 3 рази й ≥ 80 % однаково): <b>' + r.learned + '</b>.');
   if (r.refunds) lines.push('↩ Повернень за покупки: <b>' + r.refunds + '</b>: мінусом у категорії покупки (витрати категорії зменшились).');
+  if (r.parts) lines.push('💳 Платежів частинами й за розстрочками: <b>' + r.parts + '</b>' + (modOn_('debts') ? ' (рахуються в «Сплачено» на «' + DEBTS_SHEET + '»).' :
+    '. Щоб вести покупки частинами, залишки й ліміт: модуль «🤝 Борги й розстрочки» (меню «🧩 Модулі»).'));
+  if ((r.partsNew || []).length) lines.push('💳 Нова покупка частинами на «' + DEBTS_SHEET + '»: <b>' + esc_(r.partsNew.join(', ')) +
+    '</b>. Впишіть суму покупки в колонку C: тоді будуть плани платежів, прогрес і ліміт.');
+  if ((r.partsClosed || []).length) lines.push('✓ Повністю погашено: <b>' + esc_(r.partsClosed.join(', ')) + '</b> (на «' + DEBTS_SHEET + '» «Закрито»).');
   r.notes.forEach(n => lines.push('ℹ️ ' + esc_(n) + '.'));
   (r.errors || []).forEach(n => lines.push('⚠️ ' + esc_(n)));
   if (r.fees) lines.push('Комісій окремими рядками «' + CAT_FEE + '»: ' + r.fees + '.');
@@ -746,6 +754,8 @@ function importText_(ss, r, meta) {
   if (r.facts) lines.push('✅ Одразу факт: ' + r.facts);
   if (r.plans) lines.push('✓ Закрито планів: ' + r.plans);
   if (r.refunds) lines.push('↩ Повернень за покупки: ' + r.refunds);
+  if ((r.partsNew || []).length) lines.push('💳 Нова покупка частинами: ' + esc_(r.partsNew.join(', ')) + ': впишіть суму на «' + DEBTS_SHEET + '» (C).');
+  if ((r.partsClosed || []).length) lines.push('✓ Повністю погашено: ' + esc_(r.partsClosed.join(', ')));
   if (r.transfers) lines.push('↔ Нових переказів: ' + r.transfers + ': оберіть категорію.');
   (r.errors || []).forEach(e => lines.push('⚠️ ' + esc_(e)));
   if (r.lost) lines.push('⚠️ Не вмістилось у журнал: ' + r.lost + '.');

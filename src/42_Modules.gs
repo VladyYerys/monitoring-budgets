@@ -151,10 +151,11 @@ const MOD_APPLY = {
   },
   debts: (ss, on) => {
     if (on && !ss.getSheetByName(DEBTS_SHEET)) buildDebts_(ss);
-    sheetShow_(ss, DEBTS_SHEET, on && modOn_('service'));
+    sheetShow_(ss, DEBTS_SHEET, on);                                // на виду з модулем: покупки частинами, розстрочки, ліміти
     mainRowsShow_(ss, MAIN_DEBTS, on);
+    if (headerIsNew_(ss)) headerParts_(ss);                         // шапка журналу: борги місяця й ліміт частинами
     const st = debtsPlansSync_(ss);
-    return (on ? 'увімкнено ✓: аркуш «' + DEBTS_SHEET + '»' + (modOn_('service') ? '' : ' (схований, як і решта: «' + modName_('service') + '»: так)') : 'вимкнено: аркуш сховано') + (st.added + st.removed ? ', планів у журналі +' + st.added + ' −' + st.removed : '');
+    return (on ? 'увімкнено ✓: аркуш «' + DEBTS_SHEET + '» на виду (покупки частинами, розстрочки, ліміти)' : 'вимкнено: аркуш сховано') + (st.added + st.removed ? ', планів у журналі +' + st.added + ' −' + st.removed : '');
   },
   budgets: (ss, on) => {
     if (headerIsNew_(ss)) journalHeader_(ss);                       // шапка: три бюджети або витрати місяця

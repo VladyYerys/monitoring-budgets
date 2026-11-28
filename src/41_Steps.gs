@@ -42,6 +42,8 @@ const STEPS = [
     done: ss => !ss.getSheetByName(START_OLD) && !!ss.getSheetByName(START_SHEET) && String(ss.getSheetByName(START_SHEET).getRange('A1').getValue()) === QUICK_TITLE },
   { v: 16, title: '↩ Повернення за покупку: мінус у категорії покупки зменшує її витрати й повертає гроші в «мої»; імпорт з банку розпізнає «Скасування. …»',
     auto: ss => stepRefund16_(ss), done: ss => !ss.getSheetByName(JOURNAL) || refundFormulaOk_(ss) },
+  { v: 17, title: '💳 Покупки частинами й розстрочки на «Боргах»: вид, назва в банку, «Закрито», прогрес, ліміти Mono з перевіркою; борги місяця й ліміт у шапці журналу',
+    auto: ss => stepParts17_(ss), done: ss => !ss.getSheetByName(DEBTS_SHEET) || debtsNew_(ss) },
 ];
 /** Остання версія таблиці в цьому коді. */
 function schemaLast_() { return STEPS[STEPS.length - 1].v; }
@@ -274,6 +276,29 @@ function stepRefund16_(ss) {
     'Імпорт з банку робить це сам для «Скасування. …» від Mono: бере категорію покупки з журналу.'];
 }
 
+/** «Борги» вже з колонками L…O і блоком лімітів? */
+function debtsNew_(ss) {
+  const sh = ss.getSheetByName(DEBTS_SHEET);
+  return !!sh && sh.getMaxColumns() >= DEBT_COLS.length && String(sh.getRange(DEBT_HEAD, 12).getValue()) === DEBT_COLS[11] &&
+    String(sh.getRange(DEBT_LIM_HEAD, 1).getValue()) === DEBT_LIM_COLS[0];
+}
+
+/** Версія 17: на «Боргах» колонки L…O (вид, назва в банку, закрито, прогрес) і ліміти (рядки 27–29); шапка журналу K; «Борги» на виду з модулем. Ваші рядки не змінюються. */
+function stepParts17_(ss) {
+  const sh = ss.getSheetByName(DEBTS_SHEET), out = [];
+  if (!sh) return ['«' + DEBTS_SHEET + '» з\'являться з модулем «🤝 Борги й розстрочки».'];
+  ensureSize_(sh, DEBT_LIMITS[DEBT_LIMITS.length - 1].row + 2, DEBT_COLS.length);
+  const busy = sh.getRange(DEBT_LIM_HEAD, 1, DEBT_LIMITS[DEBT_LIMITS.length - 1].row - DEBT_LIM_HEAD + 1, DEBT_LIM_COLS.length).getValues()
+    .some(r => r.some(v => v !== '' && v !== null)) && String(sh.getRange(DEBT_LIM_HEAD, 1).getValue()) !== DEBT_LIM_COLS[0];
+  debtsColumns_(ss, sh);
+  out.push('«' + DEBTS_SHEET + '»: колонки «Вид», «Назва в банку», «Закрито», «Прогрес»');
+  if (busy) out.push('⚠️ рядки ' + DEBT_LIM_HEAD + '–' + DEBT_LIMITS[DEBT_LIMITS.length - 1].row + ' на «' + DEBTS_SHEET + '» зайняті вашими даними: блок лімітів не додано (звільніть і запустіть «⬆️ Оновити зараз»)');
+  else { debtsLimits_(sh); out.push('ліміти Mono (рядки ' + DEBT_LIMITS[0].row + '–' + DEBT_LIMITS[DEBT_LIMITS.length - 1].row + ')'); }
+  sheetsVisibility_(ss);
+  if (headerIsNew_(ss)) headerParts_(ss);
+  return ['Оновлено: ' + out.join('; ') + '.', 'Покупки частинами з Mono тепер додаються на «' + DEBTS_SHEET + '» самі з першого платежу: впишіть лише суму покупки (C).'];
+}
+
 /** Блок модулів має рядок для кожного модуля (нові модулі дописуються в кінець). */
 function modBlockFull_(ss) {
   const b = modBlock_(ss);
@@ -312,7 +337,7 @@ function sheetsVisibility_(ss, all) {
   VISIBLE_SHEETS.forEach(n => sheetShow_(ss, n, true));
   SERVICE_SHEETS.forEach(n => sheetShow_(ss, n, on));
   sheetShow_(ss, FOP_SHEET, on && modOn_('fop'));
-  sheetShow_(ss, DEBTS_SHEET, on && modOn_('debts'));
+  sheetShow_(ss, DEBTS_SHEET, modOn_('debts'));                        // покупки частинами й ліміти: на виду, поки модуль увімкнено
   sheetShow_(ss, CH_SHEET, false);
 }
 

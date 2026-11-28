@@ -7,6 +7,7 @@
  *        червоне: понад план), «витрачено / план · +понад». Модуль «💰 Бюджети» вимкнено: витрати місяця, непомітні, на день.
  *   G:H  наступний місяць: вільно ≈ на день · «як зараз» на кінець наступного місяця · найнижча точка з датою
  *   I:J  грейс: внести до строку · комісія, якщо все переказами · чернетки. Модуль «💳 Ліміт» вимкнено: чернетки, на день, днів.
+ *   K    (модуль «🤝 Борги й розстрочки», версія 17) борги місяця ще до сплати · найближчий платіж · ліміт частинами (з «Боргів», рядок 28).
  * Усе формулами (оновлюється одразу після правки). Бюджети рахують службові колонки «Довідника» M…R (сховані), смужку
  * малює SPARKLINE за параметрами T5:U8 (без масивів у формулах: так працює в будь-якому регіоні таблиці).
  * Вмикання й вимикання модулів переписує лише формули шапки; ваші дані не змінюються.
@@ -121,12 +122,36 @@ function journalHeader_(ss) {
   j.getRange('A1:B1').setBackground('#d9ead3'); j.getRange('A2:B2').setBackground('#f1f3f4'); j.getRange('A3:B3').setBackground('#fff2cc');
   j.getRange('C1:F3').setBackground(null); j.getRange('G1:H3').setBackground('#e8f0fe'); j.getRange('I1:J3').setBackground('#fef7e0');
   j.getRange('A3').setNote(headerNote_());
+  headerParts_(ss);
   for (let r = 1; r <= 3; r++) j.setRowHeight(r, 24);
   // рядок заголовків
   j.getRange(J_HEAD, 1, 1, HDR_COLS).setBackground(HDR_HEAD_BG).setFontColor(HDR_HEAD_FG).setFontWeight('bold').setWrap(true)
     .setHorizontalAlignment('center').setVerticalAlignment('middle');
   headerColors_(j);
   j.setFrozenRows(J_HEAD);
+}
+
+/** Колонка K шапки: борги й покупки частинами (модуль «🤝 Борги й розстрочки»); модуль вимкнено: порожньо. */
+function headerParts_(ss) {
+  const j = ss.getSheetByName(JOURNAL);
+  if (!j) return false;
+  ensureSize_(j, 3, colNum_('K'));
+  const k = j.getRange('K1:K3');
+  k.clearContent().setBackground(null);
+  if (!modOn_('debts') || !ss.getSheetByName(DEBTS_SHEET)) return false;
+  const R = c => '$' + c + '$' + J_FIRST + ':$' + c + '$' + J_LAST, tag = '"' + DEBT_TAG + '*"', notIn = R(JC.cat) + ',"<>' + DEBT_CAT[DEBT_LENT] + '"';
+  const m0 = '(EOMONTH(TODAY(),-1)+1)', m1 = 'EOMONTH(TODAY(),0)', T = x => 'TEXT(' + x + ',"#,##0")';
+  const next = 'MINIFS(' + R(JC.date) + ',' + R(JC.note) + ',' + tag + ',' + R(JC.state) + ',1,' + R(JC.date) + ',">="&TODAY(),' + notIn + ')';
+  const B = c => "'" + DEBTS_SHEET + "'!$" + c + '$' + DEBT_LIMITS[0].row;
+  setF_(k, [
+    ['="💳 Борги цього місяця: ще "&' + T('SUMIFS(' + R(JC.plan) + ',' + R(JC.note) + ',' + tag + ',' + R(JC.date) + ',">="&' + m0 + ',' + R(JC.date) + ',"<="&' + m1 + ',' + notIn + ')') + '&" ₴"'],
+    ['=IF(' + next + '=0,"Найближчого платежу немає","Найближчий "&TEXT(' + next + ',"dd.mm")&": "&' + T('SUMIFS(' + R(JC.plan) + ',' + R(JC.note) + ',' + tag + ',' + R(JC.date) + ',' + next + ',' + notIn + ')') + '&" ₴")'],
+    ['=IF(' + B('B') + '="","Ліміт частинами: впишіть на «' + DEBTS_SHEET + '»",IF(LEFT(' + B('F') + ',1)="⚠","⚠️ Ліміт частинами не сходиться з Mono: «' + DEBTS_SHEET + '»",' +
+      '"Ліміт частинами: вільно "&' + T(B('E')) + '&" з "&' + T(B('B')) + '))'],
+  ]);
+  k.setFontSize(10).setVerticalAlignment('middle').setBackground('#f3e8fd').setFontColor('#202124').setWrap(false);
+  try { j.setColumnWidth(colNum_('K'), 300); } catch (e) { /* ignore */ }
+  return true;
 }
 
 /** Кольори шапки: свої правила (діапазони лише в рядках 1…3) замінюються, решта лишається. */

@@ -95,7 +95,8 @@ function migratePlan_() {
     { sheet: CP_SHEET, ranges: [rows('A' + CP_FIRST, 'C' + CP_LAST)] },
     { sheet: JOURNAL, ranges: [rows('A' + J_FIRST, 'H' + J_LAST), rows(JC.bankId + J_FIRST, JC.order + J_LAST)], acct: true },
     { sheet: FOP_SHEET, ranges: [rows('A' + FOP_RATE_FIRST, 'L' + FOP_RATE_LAST), rows('A' + FOP_FIRST, 'E' + FOP_LAST), FOP_YEAR, rows('J' + FOP_Q_FIRST, 'K' + (FOP_Q_FIRST + 19))] },
-    { sheet: DEBTS_SHEET, ranges: [rows('A' + DEBT_FIRST, 'H' + DEBT_LAST)] },
+    { sheet: DEBTS_SHEET, ranges: [rows('A' + DEBT_FIRST, 'H' + DEBT_LAST), rows('L' + DEBT_FIRST, 'N' + DEBT_LAST),
+      rows('B' + DEBT_LIMITS[0].row, 'C' + DEBT_LIMITS[DEBT_LIMITS.length - 1].row)] },
     { sheet: REG_SHEET, ranges: [rows('A' + REG_FIRST, 'I' + REG_LAST)] },
     { sheet: DASH_SHEET, ranges: [rows(colStr_(DASH_LIMIT_COL) + (DASH_HOLE_HEAD + 1), colStr_(DASH_LIMIT_COL) + (DASH_HOLE_HEAD + CH_HOLES))] },
     { sheet: SETTINGS_SHEET, mods: true },                               // модулі: блок на «Налаштуваннях» (у старих копіях ще на «Старті»)
