@@ -35,16 +35,26 @@ function daysFormulas_(r, first) {
   ];
 }
 
+/**
+ * Підсумки «Днів» (B2:C4). Найнижча точка лише від сьогодні (версія 19): минулі дні до першої контрольної точки банку
+ * відновлюються назад лише з фактів, тож там бувають неможливі числа.
+ */
+function daysTop_(sh) {
+  const lastRow = DAYS_FIRST + DAYS_ROWS - 1, Lr = '$L$' + DAYS_FIRST + ':$L$' + lastRow, Mr = '$M$' + DAYS_FIRST + ':$M$' + lastRow, Ar = '$A$' + DAYS_FIRST + ':$A$' + lastRow;
+  const A = J_RANGE(JC.date), O = J_RANGE(JC.fact), I = J_RANGE(JC.type);
+  sh.getRange(2, 1, 3, 1).setValues([['Найнижча точка за планом (від сьогодні)'], ['Темп витрат за 30 днів, ₴/день'], ['Найнижча точка «як зараз» (від сьогодні)']]);
+  setF_(sh.getRange(2, 2, 3, 2), [
+    ['=MINIFS(' + Lr + ',' + Ar + ',">="&TODAY())', '=IFERROR(INDEX(FILTER(' + Ar + ',' + Lr + '=B2,' + Ar + '>=TODAY()),1),"")'],
+    ['=SUMIFS(' + O + ',' + I + ',"' + T_SPEND + '",' + A + ',">="&(TODAY()-30),' + A + ',"<"&TODAY())/30', ''],
+    ['=MINIFS(' + Mr + ',' + Ar + ',">="&TODAY())', '=IFERROR(INDEX(FILTER(' + Ar + ',' + Mr + '=B4,' + Ar + '>=TODAY()),1),"")'],
+  ]);
+}
+
 function buildDays_(ss) {
   const sh = ensureSize_(sheetOf_(ss, DAYS_SHEET), DAYS_FIRST + DAYS_ROWS, DAYS_HEAD.length), A = J_RANGE(JC.date), O = J_RANGE(JC.fact), I = J_RANGE(JC.type);
   const lastRow = DAYS_FIRST + DAYS_ROWS - 1, Lr = 'L' + DAYS_FIRST + ':L' + lastRow, Mr = 'M' + DAYS_FIRST + ':M' + lastRow, Ar = 'A' + DAYS_FIRST + ':A' + lastRow;
   sh.getRange(1, 1).setValue('📆 Дні').setFontWeight('bold').setFontSize(14);
-  sh.getRange(2, 1, 3, 1).setValues([['Найнижча точка за планом'], ['Темп витрат за 30 днів, ₴/день'], ['Найнижча точка «як зараз»']]);
-  setF_(sh.getRange(2, 2, 3, 2), [
-    ['=MIN(' + Lr + ')', '=IFERROR(INDEX(' + Ar + ',MATCH(B2,' + Lr + ',0)),"")'],
-    ['=SUMIFS(' + O + ',' + I + ',"' + T_SPEND + '",' + A + ',">="&(TODAY()-30),' + A + ',"<"&TODAY())/30', ''],
-    ['=MIN(' + Mr + ')', '=IFERROR(INDEX(' + Ar + ',MATCH(B4,' + Mr + ',0)),"")'],
-  ]);
+  daysTop_(sh);
   sh.getRange(DAYS_FIRST - 1, 1, 1, DAYS_HEAD.length).setValues([DAYS_HEAD]).setFontWeight('bold').setWrap(true);
   const rows = [];
   for (let r = DAYS_FIRST; r <= lastRow; r++) rows.push(daysFormulas_(r, DAYS_FIRST));

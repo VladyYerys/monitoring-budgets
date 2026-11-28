@@ -46,6 +46,8 @@ const STEPS = [
     auto: ss => stepParts17_(ss), done: ss => !ss.getSheetByName(DEBTS_SHEET) || debtsNew_(ss) },
   { v: 18, title: '📊 «Регулярні»: шапка-плитки як у «Charts» (собі й інвестиції, підключено, лишається, цей місяць, 30 днів, борги); категорії «Заплати собі» й «Інвестиції»',
     auto: ss => stepReg18_(ss), done: ss => !ss.getSheetByName(REG_SHEET) || regHeaderNew_(ss) },
+  { v: 19, title: '🗓 «Вільно» наступного місяця з «моїх» (дохід мінус відкладене, плани й бюджети), «Мін.» лише від сьогодні',
+    auto: ss => stepFree19_(ss), done: ss => freeNew_(ss) },
 ];
 /** Остання версія таблиці в цьому коді. */
 function schemaLast_() { return STEPS[STEPS.length - 1].v; }
@@ -276,6 +278,29 @@ function stepRefund16_(ss) {
   try { startRefresh_(ss); } catch (e) { /* «Швидке підключення» оновиться завтра */ }
   return ['Повернення за покупку: пишіть суму з мінусом у категорії покупки (наприклад, «Одяг −1 200»). Витрати категорії зменшаться, гроші повернуться в «мої».',
     'Імпорт з банку робить це сам для «Скасування. …» від Mono: бере категорію покупки з журналу.'];
+}
+
+/** «Вільно» з «моїх» і «Мін.» від сьогодні вже є? */
+function freeNew_(ss) {
+  const days = ss.getSheetByName(DAYS_SHEET), d = ss.getSheetByName(DICT_SHEET);
+  return (!ss.getSheetByName(MAIN_SHEET) || mainHasLabel_(ss, MAIN_NEXT_FREE)) && (!days || String(days.getRange('B2').getFormula()).indexOf('=MINIFS(') === 0) &&
+    (!d || String(d.getRange('V' + D_FIRST).getFormula()) !== '');
+}
+
+/** Версія 19: «Головне» (рядки наступного місяця), «Довідник» V, «Дні» B2:C4, шапка журналу. Ваші дані не змінюються. */
+function stepFree19_(ss) {
+  dictNextHelper_(ss);
+  const main = ss.getSheetByName(MAIN_SHEET);
+  if (main) {                                                      // рядки зсунулись: сховані за модулями ховаємо знову за підписами
+    buildMain_(ss);
+    try { main.showRows(1, Math.min(main.getMaxRows(), 120)); } catch (e) { /* ignore */ }
+    mainRowsShow_(ss, MAIN_CREDIT, modOn_('credit')); mainRowsShow_(ss, MAIN_DEBTS, modOn_('debts'));
+  }
+  const days = ss.getSheetByName(DAYS_SHEET);
+  if (days) daysTop_(days);
+  if (headerIsNew_(ss)) journalHeader_(ss);
+  return ['«Вільно» в шапці журналу тепер з «моїх» наступного місяця: дохід, що йде в місяць, мінус «на погашення ліміту», плани й бюджети категорій.',
+    '«Мін.» і «як зараз»: на картці, лише від сьогодні.'];
 }
 
 /** Версія 18: категорії «Заплати собі» й «Інвестиції», два нові приклади на «Регулярних», шапка-плитки. Ваші рядки не змінюються. */

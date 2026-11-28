@@ -32,7 +32,8 @@ function mainRows_() {
     ['Днів до кінця місяця', '=EOMONTH(TODAY(),0)-TODAY()+1', '0', 'разом із сьогоднішнім'],
     ['Можна на день', '=IF(N(B' + (MAIN_FIRST + 5) + ')>0,B' + (MAIN_FIRST + 5) + '/B' + (MAIN_FIRST + 6) + ',0)', money, 'мої ÷ днів до кінця місяця'],
     ['Прогноз на кінець місяця (за планом)', '=' + dayAt_('L', 'EOMONTH(TODAY(),0)'), money, 'на картці, якщо все піде за планами журналу'],
-    ['Прогноз на кінець наступного місяця (за планом)', '=' + dayAt_('L', 'EOMONTH(TODAY(),1)'), money, ''],
+    ['Прогноз на кінець наступного місяця (за планом)', '=' + dayAt_('L', 'EOMONTH(TODAY(),1)'), money, 'на картці (лише плани журналу, без щоденних витрат)'],
+  ].concat(mainNextRows_(), [
     ['Витрачаєте ≈ на день', "='" + DAYS_SHEET + "'!B3", money, 'середнє за 30 днів (тип «Витрати»)'],
     ['Як зараз: на картці на кінець місяця', '=' + dayAt_('M', 'EOMONTH(TODAY(),0)'), money, 'план мінус звичний темп витрат'],
     ['Найнижча точка за планом', "='" + DAYS_SHEET + "'!B2", money, 'у вікні «Днів»'],
@@ -53,11 +54,50 @@ function mainRows_() {
     ['Планів з минулою датою', '=COUNTIFS(' + J_RANGE(JC.state) + ',1,' + A + ',"<"&TODAY())', '0', 'підтвердіть або перенесіть'],
     ['Остання контрольна точка банку', '=IFERROR(1/(1/MAXIFS(' + CP_RANGE('A') + ',' + CP_RANGE('B') + ',"<>")),"")', date, '«Залишки банку»'],
     ['Межа «близько до ліміту»', '=N(' + SET_REF('margin') + ')', money, 'для тривоги в Telegram'],
-  ].concat(mainGraceRows_(), mainDebtRows_()).map((r, i, all) => {
+  ]).concat(mainGraceRows_(), mainDebtRows_()).map((r, i, all) => {
     // {{підпис}} у формулі → клітинка B цього рядка «Головного» (рядки можна переставляти)
     const f = r[1].replace(/\{\{([^}]+)\}\}/g, (x, l) => { const k = all.findIndex(y => y[0] === l); if (k < 0) throw new Error('mainRows_: немає «' + l + '»'); return 'B' + (MAIN_FIRST + k); });
     return [r[0], f, r[2], r[3]];
   });
+}
+
+/*
+ * «Вільно» наступного місяця (версія 19): від «моїх» бюджетного місяця, не від картки. Дохід, що йде в наступний місяць
+ * (факти після дня зарплати й плани), мінус «відкласти на погашення ліміту», мінус плани витрат місяця (регулярні, борги, разові),
+ * мінус бюджети категорій («Довідник», F) понад те, що вже заплановано в цих категоріях. Що лишилось, ділимо на дні місяця.
+ */
+const MAIN_NEXT_FREE = 'Наступний місяць: вільно', MAIN_NEXT_DAY = 'Наступний місяць: вільно на день';
+const SPEND_TYPES = [T_SPEND, T_SAVE, T_TAX, T_DEBT, T_CORR_OUT];       // плани, що зменшують «мої» (як T у журналі)
+function mainNextRows_() {
+  const J = J_RANGE, nm = '(EOMONTH(TODAY(),0)+1)', money = '#,##0', notFop = J(JC.acctKind) + ',"<>' + K_FOP + '"';
+  const plan = extra => 'SUMIFS(' + J(JC.plan) + ',' + J(JC.bmonth) + ',' + nm + ',' + notFop + extra + ')';
+  return [
+    ['Наступний місяць: «мої» вже є', '=SUMIFS(' + J(JC.mineIn) + ',' + J(JC.bmonth) + ',' + nm + ')-SUMIFS(' + J(JC.out) + ',' + J(JC.bmonth) + ',' + nm + ')', money,
+      'факти наступного бюджетного місяця (дохід після дня зарплати мінус уже витрачене)'],
+    ['Наступний місяць: дохід за планом', '=' + plan(',' + J(JC.mineKind) + ',"' + MINE_IN + '"'), money, 'плани, що наповнюють «мої» (зарплата після дня зарплати йде вже в наступний)'],
+    ['Наступний місяць: відкласти на погашення', '=' + plan(',' + J(JC.mineKind) + ',"' + MINE_SET_ASIDE + '"'), money, 'плани «на погашення ліміту»'],
+    ['Наступний місяць: плани витрат', '=' + SPEND_TYPES.map(t => plan(',' + J(JC.type) + ',"' + t + '"')).join('+'), money, 'регулярні, борги, разові плани'],
+    ['Наступний місяць: бюджети понад плани', '=SUM(' + D_RANGE('V') + ')', money, '«Довідник», F: бюджет категорії мінус те, що в ній уже заплановано'],
+    [MAIN_NEXT_FREE, '={{Наступний місяць: «мої» вже є}}+{{Наступний місяць: дохід за планом}}-{{Наступний місяць: відкласти на погашення}}-' +
+      '{{Наступний місяць: плани витрат}}-{{Наступний місяць: бюджети понад плани}}', money, '«мої» наступного місяця після планів і бюджетів'],
+    [MAIN_NEXT_DAY, '={{' + MAIN_NEXT_FREE + '}}/DAY(EOMONTH(TODAY(),1))', money, ''],
+  ];
+}
+
+/** «Довідник», V: бюджет категорії (тип «Витрати», F) на наступний місяць понад заплановане й уже витрачене в ній. */
+function dictNextHelper_(ss) {
+  const d = ss.getSheetByName(DICT_SHEET);
+  if (!d) return false;
+  ensureSize_(d, D_LAST, colNum_('V'));
+  const J = J_RANGE, nm = '(EOMONTH(TODAY(),0)+1)', rows = [];
+  for (let r = D_FIRST; r <= D_LAST; r++) {
+    const base = J(JC.cat) + ',$A' + r + ',' + J(JC.bmonth) + ',' + nm + ',' + J(JC.acctKind) + ',"<>' + K_FOP + '"';
+    rows.push(['=IF(AND($A' + r + '<>"",$B' + r + '="' + T_SPEND + '",N($F' + r + ')>0),MAX(0,N($F' + r + ')-SUMIFS(' + J(JC.plan) + ',' + base + ')-SUMIFS(' + J(JC.out) + ',' + base + ')),0)']);
+  }
+  d.getRange('V4').setValue('Наступний місяць: бюджет понад плани').setFontColor('#9aa0a6');
+  setF_(d.getRange(D_FIRST, colNum_('V'), rows.length, 1), rows);
+  d.hideColumns(colNum_('M'), colNum_('V') - colNum_('M') + 1);
+  return true;
 }
 
 /*
@@ -103,6 +143,7 @@ function mainDebtRows_() {
 }
 
 function buildMain_(ss) {
+  dictNextHelper_(ss);
   const sh = sheetOf_(ss, MAIN_SHEET), rows = mainRows_();
   sh.getRange(1, 1).setValue('🧭 Головне').setFontWeight('bold').setFontSize(14);
   sh.getRange(2, 1).setValue('Головні цифри на сьогодні (службовий аркуш: їх читають Telegram і шапка журналу). Графіки: «' + DASH_SHEET + '» і «' + MOB_SHEET + '».').setFontColor('#5f6368');
