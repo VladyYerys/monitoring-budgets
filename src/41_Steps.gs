@@ -52,13 +52,15 @@ const STEPS = [
     auto: ss => stepRegOrder20_(ss), done: ss => !ss.getSheetByName(REG_SHEET) || String(ss.getSheetByName(REG_SHEET).getRange('P' + REG_FIRST).getFormula()) !== '' },
   { v: 21, title: '🛍 Категорії «' + CAT_PROM + '», «' + CAT_MONO + '», «' + CAT_NP + '», «' + CAT_CASH + '» з правилами; «З Білої картки»: між своїми; надходження від ТОВ: зарплата; правила «' + RULE_SPARE + '»; старі чернетки отримують категорію',
     auto: ss => stepShops21_(ss), done: ss => !!PropertiesService.getDocumentProperties().getProperty('shops_v21') || !ss.getSheetByName(RULES_SHEET) },
+  { v: 22, title: '🛡 Журнал без стирання: стерте записане й видалені рядки повертаються; прибрати рядки: меню «' + WIPE_T + '…»',
+    auto: ss => stepProtect22_(ss), done: ss => !ss.getSheetByName(JOURNAL) || (!!ss.getSheetByName(SHADOW_SHEET) && hasTrigger_(TRG.change)) },
 ];
 /** Остання версія таблиці в цьому коді. */
 function schemaLast_() { return STEPS[STEPS.length - 1].v; }
 const SCHEMA_RETRY_MS = 6 * 3600 * 1000;
 /** Порядок вкладок: робочі зліва, службові (зазвичай сховані) справа. */
 const SHEET_ORDER = [START_SHEET, JOURNAL, REG_SHEET, DASH_SHEET, MOB_SHEET, MONTHS_SHEET, DAYS_SHEET, DICT_SHEET, SETTINGS_SHEET, FOP_SHEET, DEBTS_SHEET,
-  MAIN_SHEET, RULES_SHEET, ACC_SHEET, CP_SHEET, BANK_SHEET, HISTORY_SHEET, H_CAT_SHEET, CHECK_SHEET, CH_SHEET];
+  MAIN_SHEET, RULES_SHEET, ACC_SHEET, CP_SHEET, BANK_SHEET, HISTORY_SHEET, H_CAT_SHEET, CHECK_SHEET, CH_SHEET, SHADOW_SHEET];
 
 function buildIfMissing_(ss, name, fn, out) { if (!ss.getSheetByName(name)) { fn(ss); out.push('«' + name + '» ✓'); } }
 
@@ -285,6 +287,16 @@ function stepRefund16_(ss) {
 }
 
 /** Версія 21: категорії й правила для маркетплейсів, потім правила для старих чернеток без категорії. */
+/** Версія 22: схована копія журналу і розклад onChange (видалені рядки назад). Дані журналу не змінюються. */
+function stepProtect22_(ss) {
+  const out = [];
+  if (!ss.getSheetByName(SHADOW_SHEET)) { buildShadow_(ss); out.push('копія журналу «' + SHADOW_SHEET + '» (схована)'); } else shadowSave_(ss);
+  if (!hasTrigger_(TRG.change)) { ensureChangeTrigger_(ss); out.push('розклад «видалені рядки назад»'); }
+  if (PropertiesService.getDocumentProperties().getProperty('prot') === 'on') applyProtection_(ss);
+  sheetShow_(ss, SHADOW_SHEET, false);
+  return ['Оновлено: ' + (out.join('; ') || 'нічого') + '. Стерте записане в журналі повертається само; прибрати рядки: меню «' + WIPE_T + '…».'];
+}
+
 function stepShops21_(ss) {
   const out = dictAddCats_(ss, [[CAT_PROM, T_SPEND, '🛍 Покупки'], [CAT_MONO, T_SPEND, '🛍 Покупки'], [CAT_NP, T_SPEND, '🛍 Покупки'], [CAT_CASH, T_SPEND, '📦 Інше']]);
   rulesUpgrade21_(ss).forEach(c => out.push('правило «' + c + '»'));
@@ -397,6 +409,7 @@ function sheetsVisibility_(ss, all) {
   sheetShow_(ss, FOP_SHEET, on && modOn_('fop'));
   sheetShow_(ss, DEBTS_SHEET, modOn_('debts'));                        // покупки частинами й ліміти: на виду, поки модуль увімкнено
   sheetShow_(ss, CH_SHEET, false);
+  sheetShow_(ss, SHADOW_SHEET, false);                                  // копія журналу для захисту: завжди схована
 }
 
 function mainHasLabel_(ss, label) {

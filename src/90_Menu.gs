@@ -27,6 +27,7 @@ function onOpen() {
     .addItem('🔁 Регулярні: оновити плани зараз', 'regularNow')
     .addItem('📚 Записати місяць в «Історію»…', 'historyMonthNow')
     .addItem('💾 Копія зараз', 'backupNow')
+    .addItem('🧹 Зачистити дані…', 'wipeNow')
     .addSubMenu(ui.createMenu('🎬 Демо')
       .addItem('🎬 Додати демо-місяць', 'demoAdd')
       .addItem('🧹 Очистити демо', 'demoClear'))

@@ -21,6 +21,7 @@ function onEdit(e) {
     return;
   }
   if (sh.getName() !== JOURNAL) return;
+  try { protectEdit_(e); } catch (x) { /* захист не критичний: копія таблиці щоночі */ }    // стерли записане: повертаємо (14_Protect.gs)
   const r0 = e.range.getRow(), r1 = e.range.getLastRow(), c0 = e.range.getColumn(), c1 = e.range.getLastColumn();
   if (r1 < J_FIRST || c0 > J_INPUT_N) return;
   PropertiesService.getDocumentProperties().setProperty('lastEdit', String(Date.now()));
@@ -55,6 +56,7 @@ function onEdit(e) {
 function ensureTickTriggers_(ss) {
   if (!hasTrigger_(TRG.tick)) ScriptApp.newTrigger(TRG.tick).timeBased().everyMinutes(TICK_MIN).create();
   if (!hasTrigger_(TRG.edit)) ScriptApp.newTrigger(TRG.edit).forSpreadsheet(ss).onEdit().create();
+  ensureChangeTrigger_(ss);                                         // видалені рядки журналу повертаються (14_Protect.gs)
 }
 
 /** Правка в журналі (A…H): упорядкувати за хвилину. Правка блоку «🧩 Модулі» («Налаштування»): застосувати одразу. «так» у ліміті на «Боргах»: підтвердити. */
@@ -114,6 +116,7 @@ function mbsTick() {
   try { verIfDue_(ss); } catch (e) { /* перевірка версії: завтра */ }
   try { headerIfDue_(ss); } catch (e) { /* шапка: завтра */ }
   try { chartsIfDue_(ss); } catch (e) { /* групи графіків: завтра */ }
+  try { shadowIfStale_(ss); } catch (e) { /* копія для захисту: наступного разу */ }
 }
 
 function sortNow() {
@@ -130,7 +133,7 @@ function sortJournal_(ss) {
   try { return sortCore_(ss); } finally { lock.releaseLock(); }
 }
 
-/** Саме сортування (блокування вже взяте). Пише A…H, Y…AE; формули I, J, L…X лишаються на місці (вони рядкові). */
+/** Саме сортування (блокування вже взяте). Пише A…H, Y…AE; формули I, J, L…X лишаються на місці (вони рядкові). Після: копія для захисту. */
 function sortCore_(ss) {
   const sh = ss.getSheetByName(JOURNAL);
   if (!sh) return false;
@@ -139,10 +142,11 @@ function sortCore_(ss) {
   const rows = ah.map((v, i) => ({ v: v, b: bk[i].slice(0, BANK_N), s: bk[i][BANK_N], a: bk[i][BANK_N + 1], key: dateKey_(v[0], tz) }));
   const waitInc = Date.now() - Number(PropertiesService.getDocumentProperties().getProperty('lastEdit') || 0) < INCOMPLETE_WAIT_MS;
   const plan = planOrder_(rows, todayString_(), { now: Date.now(), waitIncomplete: waitInc });
-  if (!plan) return false;
-  sh.getRange(J_FIRST, 1, plan.length, J_INPUT_N).setValues(plan.map(x => x.v));
-  const val = x => (x === undefined || x === null ? '' : x);
-  sh.getRange(J_FIRST, y, plan.length, J_MOVE_N).setValues(plan.map(x => (x.b || emptyBank_()).concat([val(x.s), val(x.a)])));
+  if (!plan) { shadowKeep_(ss, ah, bk); return false; }                // копія для захисту від стирання (14_Protect.gs)
+  const val = x => (x === undefined || x === null ? '' : x), nv = plan.map(x => x.v), nb = plan.map(x => (x.b || emptyBank_()).concat([val(x.s), val(x.a)]));
+  sh.getRange(J_FIRST, 1, plan.length, J_INPUT_N).setValues(nv);
+  sh.getRange(J_FIRST, y, plan.length, J_MOVE_N).setValues(nb);
+  shadowKeep_(ss, nv.concat(ah.slice(nv.length)), nb.concat(bk.slice(nb.length)));
   return true;
 }
 

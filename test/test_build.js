@@ -16,11 +16,12 @@ t('all sheets, the empty starter sheet removed, marked as template, success dial
   const env = built();
   assert.strictEqual(JSON.stringify(env.ss.getSheets().map(s => s.getName())), JSON.stringify(
     ['⚡ Швидке підключення', 'Журнал', 'Регулярні', 'Charts', 'charts_mob', 'Місяці', 'Дні', 'Довідник', 'Налаштування', 'ФОП', 'Борги', 'Головне', 'Правила', 'Рахунки', 'Залишки банку',
-      'Банк', 'Історія місяців', 'Історія категорій', 'Перевірка', 'Дані графіків']));
+      'Банк', 'Історія місяців', 'Історія категорій', 'Перевірка', 'Дані графіків', '🛡 Захист журналу']));
   const hidden = env.ss.getSheets().filter(s => s.isSheetHidden()).map(s => s.getName());
   const shown = env.ss.getSheets().filter(s => !s.isSheetHidden()).map(s => s.getName());
   assert.strictEqual(JSON.stringify(shown), JSON.stringify(['⚡ Швидке підключення', 'Журнал', 'Регулярні', 'Charts', 'charts_mob']), 'на виду лише п\'ять вкладок: ' + shown);
-  assert.strictEqual(hidden.length, 15);
+  assert.strictEqual(hidden.length, 16);
+  assert.ok(env.triggers.some(x => x.getHandlerFunction() === 'mbsChange' && x.spec.onChange), 'розклад «видалені рядки назад»');
   assert.strictEqual(env.docProps.getProperty('mbs'), 'monitoring-budgets-template');
   assert.strictEqual(env.docProps.getProperty('schema_v'), String(env.ctx.schemaLast_()));
   assert.strictEqual(env.ss.getSheetByName('Налаштування').getRange('A40').getValue(), 'monitoring-budgets-template');
@@ -116,7 +117,7 @@ t('rules, bank log, main (labels the bot reads), checks, charts, schedules, prot
   const chk = env.ss.getSheetByName('Перевірка');
   assert.ok(/ПЕРЕВІРИТИ/.test(chk.getRange('B2').getFormula()) && chk.getRange('B5').getFormula());
   const h = env.triggers.map(t => t.getHandlerFunction()).sort();
-  assert.strictEqual(JSON.stringify(h), JSON.stringify(['mbsBackup', 'mbsEdit', 'mbsTick']));
+  assert.strictEqual(JSON.stringify(h), JSON.stringify(['mbsBackup', 'mbsChange', 'mbsEdit', 'mbsTick']));
   const j = env.ss.getSheetByName('Журнал');
   assert.ok(j.prots.length === 1 && j.prots[0].warn && j.prots[0].unprot[0] === 'A5:H3004');
   assert.ok(env.ss.getSheetByName('Довідник').prots.length === 0, 'довідник вільний для вводу');
@@ -133,7 +134,7 @@ t('setup again (e.g. in a copy of the template): data sheets untouched, only mis
   env.ctx.setupTemplate();
   assert.strictEqual(d.getRange('A5').getValue(), 'Моя категорія');
   assert.strictEqual(env.ss.getSheetByName('Журнал').getRange('B5').getValue(), 100);
-  assert.strictEqual(env.triggers.length, 3);
+  assert.strictEqual(env.triggers.length, 4);
   assert.strictEqual(env.docProps.getProperty('mbs'), 'monitoring-budgets-template', 'мітка відновлена з прихованої клітинки');
   assert.strictEqual(env.files.length, 1, 'перед змінами в таблиці з даними: копія');
 });

@@ -391,24 +391,29 @@ function monoPeriodNow() {
     'Що вже є в журналі, не задвоїться.', ui.ButtonSet.OK_CANCEL);
   if (q.getSelectedButton() !== ui.Button.OK) return;
   const months = Math.max(1, Math.min(PERIOD_MAX_MONTHS, Math.round(Number(String(q.getResponseText()).trim()) || PERIOD_DEF_MONTHS)));
+  show_(T, periodBegin_(ss, s, months, addDays_(monthsBack_(todayKey_(ss), months), 1)));
+}
+
+/** Почати імпорт за період з дати fromKey по сьогодні: перше вікно одразу, решта у фоні. Також з «🧹 Зачистити дані». → рядки для вікна */
+function periodBegin_(ss, s, months, fromKey) {
+  const T = PERIOD_T, up = PropertiesService.getUserProperties(), token = up.getProperty('mono_token');
   let info;
-  try { ss.toast('Перевіряю картку в Mono…', T, 10); info = monoFetch_(token, '/personal/client-info'); } catch (e) { show_(T, ['⚠️ ' + esc_(e.message)]); return; }
+  try { ss.toast('Перевіряю картку в Mono…', T, 10); info = monoFetch_(token, '/personal/client-info'); } catch (e) { return ['⚠️ ' + esc_(e.message)]; }
   const found = findCard_(info.accounts, s);
-  if (!found.acc) { show_(T, ['⚠️ ' + esc_(s.name) + ': рахунку більше немає в банку (перевипустили?): «🏦 Підключити Mono» ще раз.']); return; }
+  if (!found.acc) return ['⚠️ ' + esc_(s.name) + ': рахунку більше немає в банку (перевипустили?): «🏦 Підключити Mono» ще раз.'];
   const tz = ss.getSpreadsheetTimeZone(), dp = PropertiesService.getDocumentProperties(), k = 'mono:' + md5Short_(s.id), nowSec = Math.floor(Date.now() / 1000);
-  const fromKey = addDays_(monthsBack_(todayKey_(ss), months), 1), fromSec = Math.floor(Utilities.parseDate(fromKey + ' 00:00:00', tz, 'yyyy-MM-dd HH:mm:ss').getTime() / 1000);
+  const fromSec = Math.floor(Utilities.parseDate(fromKey + ' 00:00:00', tz, 'yyyy-MM-dd HH:mm:ss').getTime() / 1000);
   const job = { key: k, id: found.acc.id, name: s.name, months: months, fromKey: fromKey, from: fromSec, next: nowSec, total: periodWindows_(fromSec, nowSec), done: 0, fails: 0,
     shift: balanceShift_([], found.acc, dp.getProperty('mono_balance_mode:' + k) || dp.getProperty('mono_balance_mode')).shift, rep: {}, started: new Date().toISOString() };
   up.setProperty('period_job', JSON.stringify(job));
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(30 * 1000)) {
     periodLater_();
-    show_(T, ['Інша дія скрипта ще триває. Почну сам за хвилину, у фоні: ' + esc_(s.name) + ', з ' + dd_(fromKey) + '.' + fromKey.slice(0, 4) + ', вікон ' + job.total + '.']);
-    return;
+    return ['Інша дія скрипта ще триває. Почну сам за хвилину, у фоні: ' + esc_(s.name) + ', з ' + dd_(fromKey) + '.' + fromKey.slice(0, 4) + ', вікон ' + job.total + '.'];
   }
   let res;
   try { ss.toast('Завантажую перший місяць…', T, 30); res = periodRun_(ss, job); } finally { lock.releaseLock(); }
-  show_(T, periodReport_(res));
+  return periodReport_(res);
 }
 
 /** Вікно після першого кроку з меню. */

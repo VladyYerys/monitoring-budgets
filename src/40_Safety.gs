@@ -31,6 +31,7 @@ function protectList_() {
     { sheet: CH_SHEET, allow: [] },
     { sheet: DASH_SHEET, allow: [colStr_(DASH_LIMIT_COL) + (DASH_HOLE_HEAD + 1) + ':' + colStr_(DASH_LIMIT_COL) + (DASH_HOLE_HEAD + CH_HOLES)] },
     { sheet: MOB_SHEET, allow: [] },
+    { sheet: SHADOW_SHEET, allow: [] },                                    // копія журналу для захисту від стирання
   ];
 }
 

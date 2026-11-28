@@ -82,7 +82,11 @@ function makeEnv(opts = {}) {
   S.setFrozenRows = function () { }; S.setFrozenColumns = function () { }; S.setColumnWidth = function () { }; S.setRowHeight = function () { };
   S.setColumnWidths = function () { return this; }; S.setRowHeights = function () { return this; };
   S.setHiddenGridlines = function (v) { this.noGrid = !!v; return this; };
-  S.deleteRows = function (r, n) { for (const k of Array.from(this.cells.keys())) if (+k.split(',')[0] >= r) this.cells.delete(k); this.maxR -= n; };
+  // як у Таблицях: рядки r…r+n−1 зникають, нижчі піднімаються
+  S.deleteRows = function (r, n) {
+    const shift = m => { const o = new Map(); for (const [k, x] of m) { const [rr, c] = k.split(',').map(Number); if (rr < r) o.set(k, x); else if (rr >= r + n) o.set(this.key(rr - n, c), x); } return o; };
+    this.cells = shift(this.cells); this.dv = shift(this.dv); this.maxR -= n;
+  };
   S.deleteColumns = function (c, n) { for (const k of Array.from(this.cells.keys())) if (+k.split(',')[1] >= c) this.cells.delete(k); this.maxC -= n; };
   S.hideSheet = function () { this.hiddenSheet = true; return this; };
   S.showSheet = function () { this.hiddenSheet = false; return this; };
@@ -301,7 +305,7 @@ function makeEnv(opts = {}) {
   const triggers = []; let tid = 0;
   const ScriptApp = { getProjectTriggers: () => triggers.slice(), deleteTrigger: t => triggers.splice(triggers.indexOf(t), 1),
     newTrigger: h => { const spec = {}; const b = { timeBased: () => b, atHour: x => (spec.hour = x, b), nearMinute: x => (spec.minute = x, b), everyDays: x => (spec.days = x, b), after: x => (spec.after = x, b),
-      everyMinutes: x => (spec.min = x, b), inTimezone: z => (spec.tz = z, b), forSpreadsheet: () => b, onEdit: () => (spec.onEdit = true, b), create: () => { const id = 'T' + (++tid); const t = { getHandlerFunction: () => h, getUniqueId: () => id, spec }; triggers.push(t); return t; } }; return b; } };
+      everyMinutes: x => (spec.min = x, b), inTimezone: z => (spec.tz = z, b), forSpreadsheet: () => b, onEdit: () => (spec.onEdit = true, b), onChange: () => (spec.onChange = true, b), create: () => { const id = 'T' + (++tid); const t = { getHandlerFunction: () => h, getUniqueId: () => id, spec }; triggers.push(t); return t; } }; return b; } };
   const mkProps = () => { const st = {}; return { st, getProperty: k => (k in st ? st[k] : null), setProperty: (k, v) => { st[k] = String(v); },
     setProperties: o => Object.keys(o).forEach(k => (st[k] = String(o[k]))), getProperties: () => Object.assign({}, st), deleteProperty: k => { delete st[k]; } }; };
   const docProps = mkProps(), userProps = mkProps();

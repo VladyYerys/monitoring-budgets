@@ -131,12 +131,12 @@ t('calendar: «так» on «Старт» creates and fills the calendar; menu �
   assert.ok(c.budgetLines_(env.ss, rows, null, true).length === 1, 'знімок для радника рахує бюджети все одно');
 });
 
-t('everything off: a plain journal with «Місяці», «Дні» and charts; only the order schedule stays; tick applies a missed edit', () => {
+t('everything off: a plain journal with «Місяці», «Дні» and charts; only the order schedule and the journal protection stay; tick applies a missed edit', () => {
   const env = setup(), c = env.ctx;
   K(c, 'MODS').forEach((m, i) => st(env).getRange(44 + i, 2).setValue('ні'));
   c.mbsTick();                                                            // правку пропущено: застосує розклад
   assert.ok(K(c, 'MODS').every(m => c.modOn_(m.id) === false));
-  assert.strictEqual(JSON.stringify(env.triggers.map(x => x.getHandlerFunction()).sort()), JSON.stringify(['mbsEdit', 'mbsTick']));
+  assert.strictEqual(JSON.stringify(env.triggers.map(x => x.getHandlerFunction()).sort()), JSON.stringify(['mbsChange', 'mbsEdit', 'mbsTick']));
   ['⚡ Швидке підключення', 'Журнал', 'Регулярні', 'Charts', 'charts_mob'].forEach(n => assert.strictEqual(env.ss.getSheetByName(n).isSheetHidden(), false, n));
   ['Місяці', 'Дні', 'Довідник', 'Налаштування', 'Головне'].forEach(n => assert.strictEqual(env.ss.getSheetByName(n).isSheetHidden(), true, n + ': працює схованим'));
   assert.ok(env.ss.getSheetByName('Charts').charts.length >= 6 && env.ss.getSheetByName('charts_mob').charts.length >= 4);

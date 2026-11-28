@@ -8,7 +8,7 @@
  */
 
 const TEMPLATE_MARK = 'monitoring-budgets-template';   // мітка шаблону: її шукає CI перед заливкою (ci/guard.js)
-const TEMPLATE_VERSION = '0.5.8';
+const TEMPLATE_VERSION = '0.5.9';
 const SUPPORT_URL = 'https://send.monobank.ua/jar/6ChdYHjkd9';   // «❤️ Підтримати автора»: публічна банка автора
 const APP_NAME = 'Monitoring Budgets';
 const REPO_URL = 'https://github.com/VladyYerys/monitoring-budgets';                 // відкритий код, «Що нового», питання (issues)
@@ -116,4 +116,4 @@ const ACC_RANGE = c => "'" + ACC_SHEET + "'!$" + c + '$' + ACC_FIRST + ':$' + c 
 
 /* ---------- розклади (назви обробників з префіксом mbs: шаблон не відповідає на розклади іншого коду) ---------- */
 const TRG = { tick: 'mbsTick', edit: 'mbsEdit', soon: 'mbsSoon', imp: 'mbsImport', impRetry: 'mbsImportRetry',
-  backup: 'mbsBackup', morning: 'mbsMorning', morningRetry: 'mbsMorningRetry', period: 'mbsPeriod' };
+  backup: 'mbsBackup', morning: 'mbsMorning', morningRetry: 'mbsMorningRetry', period: 'mbsPeriod', change: 'mbsChange' };
