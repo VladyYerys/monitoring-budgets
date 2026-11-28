@@ -91,6 +91,12 @@ function headerFormulas_(ss) {
   return out;
 }
 
+/** Підказка на «Журналі» (A3): як писати рядок. */
+function headerNote_() {
+  return 'Пишіть у рядки нижче жовтої лінії: дата, ' + J_SUM_HINT + ', категорія зі списку, статус. Решту рахують формули. ' +
+    'Майбутнє (плани) скрипт ставить угору, минуле вниз; сховані колонки праворуч службові.';
+}
+
 /** Побудувати або переписати шапку журналу (рядки 1…3) і рядок заголовків. Дані журналу не чіпає. */
 function journalHeader_(ss) {
   const j = ss.getSheetByName(JOURNAL);
@@ -114,8 +120,7 @@ function journalHeader_(ss) {
   j.getRange('F1:F3').setHorizontalAlignment('right');
   j.getRange('A1:B1').setBackground('#d9ead3'); j.getRange('A2:B2').setBackground('#f1f3f4'); j.getRange('A3:B3').setBackground('#fff2cc');
   j.getRange('C1:F3').setBackground(null); j.getRange('G1:H3').setBackground('#e8f0fe'); j.getRange('I1:J3').setBackground('#fef7e0');
-  j.getRange('A3').setNote('Пишіть у рядки нижче жовтої лінії: дата, сума (завжди додатна), категорія зі списку, статус. Решту рахують формули. ' +
-    'Майбутнє (плани) скрипт ставить угору, минуле вниз; сховані колонки праворуч службові.');
+  j.getRange('A3').setNote(headerNote_());
   for (let r = 1; r <= 3; r++) j.setRowHeight(r, 24);
   // рядок заголовків
   j.getRange(J_HEAD, 1, 1, HDR_COLS).setBackground(HDR_HEAD_BG).setFontColor(HDR_HEAD_FG).setFontWeight('bold').setWrap(true)

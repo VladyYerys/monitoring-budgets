@@ -403,7 +403,7 @@ function makeEnv(opts = {}) {
   };
   vm.createContext(ctx);
   if (opts.code) vm.runInContext(opts.code, ctx, { filename: 'Code.gs' }); else require('./source').load(ctx);
-  return { ctx, ss, sheets, Sheet: (n) => ss.insertSheet(n), calls, docProps, userProps, triggers, files, isLocked: () => locked, Utilities, tz, colNum, colStr, cals,
+  return { ctx, ss, sheets, opts, Sheet: (n) => ss.insertSheet(n), calls, docProps, userProps, triggers, files, isLocked: () => locked, Utilities, tz, colNum, colStr, cals,
     addFile, addSheetFile, root, docs,
     // інша таблиця (наприклад, стара копія шаблону з іншого makeEnv) для SpreadsheetApp.openById
     addSpreadsheet: (id, other) => { others[id] = other; } };

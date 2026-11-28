@@ -6,6 +6,7 @@
  * Сім'я: кожен учасник відкриває ту саму таблицю у своєму акаунті й підключає свій Mono: токени окремо, розклади окремо.
  * Можна вести кілька рахунків одного токена (наприклад, картку й рахунок ФОП). Контрольні точки: лише для основної картки.
  * Розклад (mbsImport) імпортує все, що підключив цей користувач: Mono і ПриватБанк.
+ * «🗓 Імпорт з банку за період…»: місяці назад, по 31 добі у фоні (mbsPeriod), див. розділ нижче.
  */
 
 const MONO_API = 'https://api.monobank.ua';
@@ -135,6 +136,7 @@ function disconnectMono() {
   if (!menuOk_('🏦 Mono')) return;
   ['mono_token', 'mono_accs', 'mono_account', 'mono_pan', 'mono_iban', 'mono_type'].forEach(k => PropertiesService.getUserProperties().deleteProperty(k));
   if (!PropertiesService.getUserProperties().getProperty('pb_token')) { removeTriggers_(TRG.imp); removeTriggers_(TRG.impRetry); }
+  removeTriggers_(TRG.period); PropertiesService.getUserProperties().deleteProperty('period_job');
   show_('🏦 Mono відключено', ['Токен стерто. Сам токен можна відкликати й на api.monobank.ua. Рахунки на аркуші «' + ACC_SHEET + '» лишились (там історія).']);
 }
 
@@ -179,12 +181,13 @@ const RAW_SALARY = /заробітн|зарплат|з\/п|salary/i, RAW_PARTS =
  */
 function rawRows_(items, rules, acc, timeOf, hist) {
   const rows = items.slice().sort((a, b) => b.time - a.time).map(it => {
-    const amt = round2_(it.amount / 100), cz = categorize_(it, amt, rules, acc), h = !cz.cat || cz.cat === CAT_TRANSFER ? histGuess_(hist || {}, amt, it.description) : null;
+    const amt = round2_(it.amount / 100), refund = amt > 0 && REFUND_RE.test(String(it.description || ''));
+    const cz = refund ? { cat: REFUND_NOTE + ' (мінусом)', rule: null } : categorize_(it, amt, rules, acc), h = !cz.cat || cz.cat === CAT_TRANSFER ? histGuess_(hist || {}, amt, it.description) : null;
     const where = ['description', 'comment', 'counterName'].filter(k => RAW_SALARY.test(String(it[k] || '')));
     const parts = RAW_PARTS.test(String(it.description || '') + ' ' + String(it.comment || ''));
     return { t: timeOf(it), amt: amt, desc: String(it.description || ''), comment: String(it.comment || ''), mcc: Number(it.mcc || 0), omcc: Number(it.originalMcc || 0),
       name: String(it.counterName || ''), code: rawCode_(it.counterEdrpou), iban: rawIban_(it.counterIban), hold: !!it.hold,
-      cat: cz.cat || (h && h.cat) || '', why: cz.rule ? 'правило: ' + cz.rule.text.slice(0, 30) + (cz.rule.text.length > 30 ? '…' : '') : h && h.cat ? 'історія: ' + h.text : isTransfer_(it) ? 'схоже на переказ' : cz.cat ? '' : 'немає правила',
+      cat: cz.cat || (h && h.cat) || '', why: refund ? 'категорія покупки з журналу (той самий магазин, до 60 днів)' : cz.rule ? 'правило: ' + cz.rule.text.slice(0, 30) + (cz.rule.text.length > 30 ? '…' : '') : h && h.cat ? 'історія: ' + h.text : isTransfer_(it) ? 'схоже на переказ' : cz.cat ? '' : 'немає правила',
       salary: where, parts: parts ? (/погашенн/i.test(String(it.description || '')) ? 'погашення' : 'покупка?') : '' };
   });
   const cnt = f => rows.filter(f).length, sal = rows.filter(r => r.salary.length);
@@ -243,6 +246,213 @@ function monoRawNow() {
   const data = rawRows_(items, readRules_(ss), acc, timeOf, histMap_(readJournal_(ss)));
   const html = HtmlService.createHtmlOutput(rawHtml_(s.name, days, data)).setWidth(1150).setHeight(700);
   try { ui.showModalDialog(html, T); } catch (e) { Logger.log(JSON.stringify(data.sum)); }
+}
+
+/* ---------- 🗓 імпорт за період: місяці назад, по 31 добі у фоні ---------- */
+
+/*
+ * «N місяців» = з того ж числа N місяців тому, наступного дня, по сьогодні (1 місяць: 30 днів і сьогодні, одне вікно).
+ * Mono віддає виписку максимум за 31 добу й 1 запит на хвилину. Тому період ділимо на вікна по 31 добі, новіші спершу:
+ * перше вікно одразу з меню, далі розклад mbsPeriod раз на хвилину, по вікну за запуск. Таблицю можна закрити.
+ * Дублів немає: ті самі номери операцій, що й у щоденному імпорті (уже в журналі чи в журналі «Банк»: пропуск);
+ * ваш рядок з тією ж сумою ±1 день отримує номер операції, як завжди. Категорії, «✅ факт», між своїми, історія: як у щоденному.
+ * Не чіпає: «Старт обліку», контрольні точки, час останнього імпорту; старих чернеток не прибирає (вікно без «банк скасував»).
+ * Зупиняється: усе пройдено; у журналі закінчились вільні рядки; Mono не віддає (код 4xx); 3 невдачі поспіль (ліміт, VPN, збій); вручну.
+ * Стан у налаштуваннях скрипта цього користувача (UserProperties, як і токен): 'period_job', підсумок 'period_last'.
+ */
+const PERIOD_MAX_MONTHS = 12, PERIOD_DEF_MONTHS = 3, PERIOD_SPAN = 31 * 86400, PERIOD_WAIT_MS = 65 * 1000, PERIOD_FAILS = 3;
+const PERIOD_T = '🗓 Імпорт з банку за період';
+const PERIOD_SUM = ['seen', 'drafts', 'facts', 'transfers', 'uncategorized', 'matched', 'other', 'pairs', 'plans', 'learned', 'fees', 'lost', 'refunds'];
+
+/** Чиста функція: та сама дата n місяців тому ('yyyy-MM-dd'); 31-ше в коротшому місяці → його останній день. */
+function monthsBack_(key, n) {
+  let y = Number(key.slice(0, 4)), m = Number(key.slice(5, 7)) - n;
+  while (m < 1) { m += 12; y--; }
+  const ym = y + '-' + pad2_(m);
+  return ym + '-' + pad2_(Math.min(Number(key.slice(8, 10)), Number(lastDayOf_(ym).slice(8))));
+}
+
+/** Чиста функція: скільки вікон по 31 добі в [from, to] (с). */
+function periodWindows_(fromSec, toSec) { return Math.max(1, Math.ceil((toSec - fromSec) / PERIOD_SPAN)); }
+
+/** Помилка Mono, після якої далі не йдемо (токен, код 4xx: найчастіше «так далеко банк не віддає»). Ліміт, VPN, 5xx, мережа: повторити. */
+function periodFatal_(msg) { return /токен|кодом 4\d\d/.test(String(msg || '')); }
+
+function periodLater_() {
+  removeTriggers_(TRG.period);
+  ScriptApp.newTrigger(TRG.period).timeBased().after(PERIOD_WAIT_MS).create();
+}
+
+/** Одне вікно: виписка → bankIngest_ (як щоденний імпорт, без контрольних точок і без «банк скасував»). → звіт вікна */
+function periodStep_(ss, job) {
+  const tz = ss.getSpreadsheetTimeZone(), up = PropertiesService.getUserProperties(), dp = PropertiesService.getDocumentProperties();
+  const token = up.getProperty('mono_token'), k = job.key;
+  if (!token || !monoAccs_().some(x => 'mono:' + md5Short_(x.id) === k)) throw new Error('Mono відключено або цієї картки більше немає серед підключених');
+  const acc = accList_(ss).find(x => x.key === k) || accEnsure_(ss, { key: k, name: job.name, bank: 'Mono' });
+  const to = job.next, from = Math.max(job.from, to - PERIOD_SPAN);
+  const dateOf = it => Utilities.formatDate(new Date(it.time * 1000), tz, 'yyyy-MM-dd');
+  const timeOf = it => Utilities.formatDate(new Date(it.time * 1000), tz, 'dd.MM.yyyy HH:mm');
+  const items = fetchStatement_(token, job.id, from, to);
+  const exp = expandOps_(items, dp.getProperty('mono_fee_included:' + k) || dp.getProperty('mono_fee_included'));
+  if (exp.learned) dp.setProperty('mono_fee_included:' + k, exp.learned);
+  const res = bankIngest_(ss, { acc: acc, items: exp.ops, pending: exp.skipped, dateOf: dateOf, timeOf: timeOf, balShift: job.shift, src: 'mono' });
+  const r = accReport_(acc, exp.ops, res, dateOf, todayKey_(ss));
+  r.fees = exp.fees;
+  r.win = [Utilities.formatDate(new Date(from * 1000), tz, 'yyyy-MM-dd'), Utilities.formatDate(new Date(to * 1000), tz, 'yyyy-MM-dd')];
+  PERIOD_SUM.forEach(x => { job.rep[x] = (job.rep[x] || 0) + (r[x] || 0); });
+  job.done++; job.next = from; job.fails = 0;
+  try { sortCore_(ss); } catch (e) { /* порядок наведе розклад */ }
+  return r;
+}
+
+/**
+ * Крок роботи з обробкою помилок і плануванням наступного. → { state: 'more' | 'done' | 'stop', job, r?, err? }
+ * Запуск рахується спробою ще до запиту, і наступний запуск планується заздалегідь: якщо Google обірве виконання
+ * (6 хв, дуже велика виписка), робота не зависне, а третя така спроба поспіль зупинить її з поясненням.
+ */
+function periodRun_(ss, job) {
+  const up = PropertiesService.getUserProperties();
+  job.fails = (job.fails || 0) + 1;
+  if (job.fails > PERIOD_FAILS) return { state: 'stop', job: job, err: job.err || 'три спроби поспіль обірвались', last: periodEnd_(ss, job, job.err || 'три спроби поспіль обірвались') };
+  up.setProperty('period_job', JSON.stringify(job));
+  periodLater_();
+  let r = null;
+  try { r = periodStep_(ss, job); }
+  catch (e) {
+    const msg = String(e && e.message || e);
+    if (!up.getProperty('period_job')) { removeTriggers_(TRG.period); return { state: 'stop', job: job, err: 'зупинено вручну' }; }
+    if (periodFatal_(msg) || job.fails >= PERIOD_FAILS || /відключено/.test(msg)) return { state: 'stop', job: job, err: msg, last: periodEnd_(ss, job, msg) };
+    job.err = msg.slice(0, 200);
+    up.setProperty('period_job', JSON.stringify(job));
+    return { state: 'more', job: job, err: msg };
+  }
+  if (!up.getProperty('period_job')) { removeTriggers_(TRG.period); return { state: 'stop', job: job, r: r, err: 'зупинено вручну' }; }   // зупинили з меню, поки йшло вікно
+  if (r.lost) return { state: 'stop', job: job, r: r, err: 'у журналі закінчились вільні рядки (не вмістилось ' + r.lost + ')', last: periodEnd_(ss, job, 'у журналі закінчились вільні рядки') };
+  if (job.next <= job.from) return { state: 'done', job: job, r: r, last: periodEnd_(ss, job, '') };
+  delete job.err;
+  up.setProperty('period_job', JSON.stringify(job));
+  periodLater_();
+  return { state: 'more', job: job, r: r };
+}
+
+/** Кінець роботи: прибрати розклад і стан, зберегти підсумок; у Telegram, якщо працювало у фоні. → підсумок */
+function periodEnd_(ss, job, err) {
+  const up = PropertiesService.getUserProperties();
+  removeTriggers_(TRG.period);
+  up.deleteProperty('period_job');
+  const last = { t: new Date().toISOString(), ok: !err, err: String(err || '').slice(0, 200), name: job.name, months: job.months, fromKey: job.fromKey,
+    done: job.done, total: job.total, rep: job.rep };
+  up.setProperty('period_last', JSON.stringify(last));
+  if (job.total > 1 && tgReady_()) { try { tgSend_(periodText_(last)); } catch (e) { /* підсумок є в «Стані таблиці» */ } }
+  return last;
+}
+
+/** Підсумок одним рядком (без HTML-розмітки, з екрануванням): для «Стану таблиці», вікна й Telegram. */
+function periodSummary_(rep) {
+  rep = rep || {};
+  return 'нових операцій ' + (rep.drafts || 0) + (rep.facts ? ', з них одразу «✅ факт» ' + rep.facts : '') + (rep.transfers ? ', переказів ' + rep.transfers : '') +
+    (rep.uncategorized ? ', без категорії ' + rep.uncategorized : '') + (rep.refunds ? ', повернень ' + rep.refunds : '') + '; уже були в журналі: ' + ((rep.matched || 0) + (rep.other || 0)) +
+    '; операцій у виписках: ' + (rep.seen || 0) + (rep.lost ? '; ⚠️ не вмістилось: ' + rep.lost : '');
+}
+
+function periodText_(last) {
+  return '🗓 <b>Імпорт за період</b> ' + (last.ok ? '✓' : '⚠️') + '\n' + esc_(last.name) + ' · з ' + dd_(last.fromKey) + '.' + last.fromKey.slice(0, 4) +
+    ' · вікон ' + last.done + ' з ' + last.total + '\n' + esc_(periodSummary_(last.rep)) + (last.ok ? '' : '\nЗупинено: ' + esc_(last.err)) +
+    ((last.rep || {}).transfers || (last.rep || {}).uncategorized ? '\nПерекази й операції без категорії: чернетки в «' + JOURNAL + '», оберіть категорію.' : '');
+}
+
+/** Меню: почати (картка, скільки місяців) або, якщо вже триває, показати стан і зупинити. */
+function monoPeriodNow() {
+  if (!menuOk_(PERIOD_T)) return;
+  const ss = SpreadsheetApp.getActive(), ui = SpreadsheetApp.getUi(), up = PropertiesService.getUserProperties(), T = PERIOD_T;
+  const busy = jsonProp_(up, 'period_job');
+  if (busy) {
+    const a = ui.alert(T, 'Уже триває: ' + busy.name + ', з ' + dd_(busy.fromKey) + '.' + busy.fromKey.slice(0, 4) + '. Пройдено вікон ' + busy.done + ' з ' + busy.total +
+      ' (по одному за хвилину).\n' + periodSummary_(busy.rep) + (busy.err ? '\nОстання спроба: ' + busy.err : '') + '\n\nЗупинити? Що вже завантажилось, лишиться в журналі.', ui.ButtonSet.YES_NO);
+    if (a === ui.Button.YES) { periodEnd_(ss, busy, 'зупинено вручну'); show_(T, ['Зупинено. Що встигло завантажитись, лишилось у журналі.']); }
+    return;
+  }
+  const token = up.getProperty('mono_token'), accs = monoAccs_();
+  if (!token || !accs.length) {
+    show_(T, ['Mono ще не підключено: «🚀 Підключення», крок 1. Інші банки: виписка CSV і «📥 Імпорт виписок з папки».']); return;
+  }
+  if (!ss.getSheetByName(JOURNAL) || !ss.getSheetByName(BANK_SHEET) || !ss.getSheetByName(RULES_SHEET) || !ss.getSheetByName(ACC_SHEET)) {
+    show_(T, ['Немає аркушів журналу чи банку: «🛠 Оновлення таблиці → ⬆️ Оновити зараз».']); return;
+  }
+  let s = accs[0];
+  if (accs.length > 1) {
+    const a = ui.prompt(T, 'Яку картку? ' + accs.map((x, i) => (i + 1) + ') ' + x.name).join(', ') + '.\nВведіть номер (порожньо: 1):', ui.ButtonSet.OK_CANCEL);
+    if (a.getSelectedButton() !== ui.Button.OK) return;
+    s = accs[Math.max(1, Math.min(accs.length, Number(String(a.getResponseText()).trim()) || 1)) - 1];
+  }
+  const q = ui.prompt(T, 'За скільки місяців назад завантажити (1–' + PERIOD_MAX_MONTHS + ')? Порожньо: ' + PERIOD_DEF_MONTHS + '.\n' +
+    'Mono віддає 31 день за раз і 1 запит на хвилину: перший місяць прийде одразу, решта сама у фоні, по місяцю за хвилину. Таблицю можна закрити. ' +
+    'Що вже є в журналі, не задвоїться.', ui.ButtonSet.OK_CANCEL);
+  if (q.getSelectedButton() !== ui.Button.OK) return;
+  const months = Math.max(1, Math.min(PERIOD_MAX_MONTHS, Math.round(Number(String(q.getResponseText()).trim()) || PERIOD_DEF_MONTHS)));
+  let info;
+  try { ss.toast('Перевіряю картку в Mono…', T, 10); info = monoFetch_(token, '/personal/client-info'); } catch (e) { show_(T, ['⚠️ ' + esc_(e.message)]); return; }
+  const found = findCard_(info.accounts, s);
+  if (!found.acc) { show_(T, ['⚠️ ' + esc_(s.name) + ': рахунку більше немає в банку (перевипустили?): «🏦 Підключити Mono» ще раз.']); return; }
+  const tz = ss.getSpreadsheetTimeZone(), dp = PropertiesService.getDocumentProperties(), k = 'mono:' + md5Short_(s.id), nowSec = Math.floor(Date.now() / 1000);
+  const fromKey = addDays_(monthsBack_(todayKey_(ss), months), 1), fromSec = Math.floor(Utilities.parseDate(fromKey + ' 00:00:00', tz, 'yyyy-MM-dd HH:mm:ss').getTime() / 1000);
+  const job = { key: k, id: found.acc.id, name: s.name, months: months, fromKey: fromKey, from: fromSec, next: nowSec, total: periodWindows_(fromSec, nowSec), done: 0, fails: 0,
+    shift: balanceShift_([], found.acc, dp.getProperty('mono_balance_mode:' + k) || dp.getProperty('mono_balance_mode')).shift, rep: {}, started: new Date().toISOString() };
+  up.setProperty('period_job', JSON.stringify(job));
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(30 * 1000)) {
+    periodLater_();
+    show_(T, ['Інша дія скрипта ще триває. Почну сам за хвилину, у фоні: ' + esc_(s.name) + ', з ' + dd_(fromKey) + '.' + fromKey.slice(0, 4) + ', вікон ' + job.total + '.']);
+    return;
+  }
+  let res;
+  try { ss.toast('Завантажую перший місяць…', T, 30); res = periodRun_(ss, job); } finally { lock.releaseLock(); }
+  show_(T, periodReport_(res));
+}
+
+/** Вікно після першого кроку з меню. */
+function periodReport_(res) {
+  const j = res.job, r = res.r, lines = ['Картка: <b>' + esc_(j.name) + '</b>. Період: з <b>' + dd_(j.fromKey) + '.' + j.fromKey.slice(0, 4) + '</b> по сьогодні (' + j.months +
+    ' міс.), вікон по 31 дню: ' + j.total + '.'];
+  if (r) lines.push('Вікно ' + dd_(r.win[0]) + '–' + dd_(r.win[1]) + ': операцій у виписці ' + r.seen + '; нових <b>' + r.drafts + '</b>' +
+    (r.facts ? ' (одразу «✅ факт» ' + r.facts + ')' : '') + '; уже були в журналі: ' + (r.matched + r.other) + '.');
+  if (res.state === 'more') {
+    const left = j.total - j.done;
+    if (res.err) lines.push('⚠️ Mono зараз не відповів: ' + esc_(res.err) + '. Спробую сам за хвилину.');
+    lines.push('Решта (' + left + ' ' + (left === 1 ? 'вікно' : left < 5 ? 'вікна' : 'вікон') + ') сама у фоні, по вікну за хвилину: приблизно ' + (left + 1) + ' хв. Таблицю можна закрити.',
+      'Підсумок: ' + (tgReady_() ? 'повідомлення в Telegram і ' : '') + '«🩺 Стан таблиці». Зупинити: цей самий пункт меню.');
+  } else if (res.state === 'done') {
+    lines.push('<b>Готово.</b> Разом: ' + esc_(periodSummary_(j.rep)) + '.');
+  } else {
+    lines.push('⚠️ Зупинено: ' + esc_(res.err) + '. Що встигло завантажитись, лишилось у журналі. ' + (res.job.done ? 'Разом: ' + esc_(periodSummary_(j.rep)) + '.' : ''));
+  }
+  if (j.rep.transfers || j.rep.uncategorized) lines.push('Перекази й операції без категорії лишились чернетками в «' + JOURNAL + '»: оберіть категорію.');
+  return lines;
+}
+
+/** Рядки для «🩺 Стан таблиці». */
+function periodStatusLines_(ss) {
+  const up = PropertiesService.getUserProperties(), tz = ss.getSpreadsheetTimeZone(), job = jsonProp_(up, 'period_job'), last = jsonProp_(up, 'period_last');
+  if (job) return ['Імпорт за період: <b>триває</b>, ' + esc_(job.name) + ', з ' + dd_(job.fromKey) + '.' + job.fromKey.slice(0, 4) + ', вікон ' + job.done + ' з ' + job.total +
+    (hasTrigger_(TRG.period) ? '' : ' ⚠️ розкладу немає: запустіть «' + PERIOD_T + '…» ще раз') + (job.err ? '; остання спроба: ' + esc_(job.err) : '')];
+  if (!last) return [];
+  return ['Імпорт за період (' + Utilities.formatDate(new Date(last.t), tz, 'dd.MM.yyyy HH:mm') + ', ' + esc_(last.name) + ', з ' + dd_(last.fromKey) + '.' + last.fromKey.slice(0, 4) + '): ' +
+    (last.ok ? '✓ ' : '⚠️ ' + esc_(last.err) + '; ') + esc_(periodSummary_(last.rep))];
+}
+
+function mbsPeriod() { if (quietOk_()) return periodTick_(); }
+
+/** З розкладу: одне вікно; зайнято іншою дією: ще через хвилину. */
+function periodTick_() {
+  const ss = SpreadsheetApp.getActive(), up = PropertiesService.getUserProperties();
+  removeTriggers_(TRG.period);
+  if (!up.getProperty('period_job')) return null;
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(30 * 1000)) { periodLater_(); return null; }
+  try {
+    const job = jsonProp_(up, 'period_job');                         // читаємо під замком: попередній запуск міг щойно зберегти поступ
+    return job ? periodRun_(ss, job) : null;
+  } finally { lock.releaseLock(); }
 }
 
 /* ---------- за розкладом ---------- */
@@ -325,12 +535,12 @@ function importBank_(ss) {
 
 function emptyReport_() {
   return { drafts: 0, lost: 0, transfers: 0, uncategorized: 0, matched: 0, other: 0, updated: 0, redated: 0, changed: 0, seen: 0, fees: 0, skipped: 0, vanished: 0,
-    pairs: 0, plans: 0, learned: 0, facts: 0,
+    pairs: 0, plans: 0, learned: 0, facts: 0, refunds: 0,
     checkpoints: [], own: null, limit: null, newOps: [], todayOps: { out: 0, inc: 0, n: 0 }, notes: [], accounts: [] };
 }
 
 function mergeReport_(rep, r) {
-  ['drafts', 'lost', 'transfers', 'uncategorized', 'matched', 'other', 'updated', 'redated', 'changed', 'seen', 'fees', 'skipped', 'vanished', 'pairs', 'plans', 'learned', 'facts']
+  ['drafts', 'lost', 'transfers', 'uncategorized', 'matched', 'other', 'updated', 'redated', 'changed', 'seen', 'fees', 'skipped', 'vanished', 'pairs', 'plans', 'learned', 'facts', 'refunds']
     .forEach(k => { rep[k] = (rep[k] || 0) + (r[k] || 0); });
   ['checkpoints', 'newOps', 'notes', 'accounts'].forEach(k => { rep[k] = rep[k].concat(r[k] || []); });
   ['out', 'inc', 'n'].forEach(k => { rep.todayOps[k] = round2_(rep.todayOps[k] + ((r.todayOps || {})[k] || 0)); });
@@ -343,7 +553,7 @@ function accReport_(acc, items, res, dateOf, today) {
   const p = res.plan, r = emptyReport_();
   Object.assign(r, { drafts: res.written + (res.taken || 0), lost: res.lost, transfers: p.stats.transfers, uncategorized: p.stats.uncategorized, matched: p.marks.length,
     other: p.stats.other, updated: p.stats.resized, redated: p.stats.redated, changed: p.stats.changed, seen: items.length, vanished: p.vanish.length, accounts: [acc.name],
-    pairs: p.stats.own || 0, plans: p.stats.plans || 0, learned: p.stats.learned || 0, facts: p.stats.facts || 0 });
+    pairs: p.stats.own || 0, plans: p.stats.plans || 0, learned: p.stats.learned || 0, facts: p.stats.facts || 0, refunds: p.stats.refunds || 0, skipped: p.stats.skipped || 0 });
   const op = (d, cat) => ({ key: d.key, time: String(d.bank[4] || '').slice(11, 16), amt: Number(d.bank[2]) || 0, cat: cat || '', desc: String(d.bank[1] || ''), acc: acc.name });
   r.newOps = p.drafts.slice(0, res.written).map(d => op(d, d.c)).concat((p.takes || []).map(t => op(t, t.c)));
   items.forEach(it => { if (dateOf(it) !== today) return; const a = Number(it.amount) / 100; r.todayOps.n++;
@@ -374,12 +584,10 @@ function importMono_(ss) {
     if (exp.learned) dp.setProperty('mono_fee_included:' + k, exp.learned);
     const bs = balanceShift_(items, a, dp.getProperty('mono_balance_mode:' + k) || dp.getProperty('mono_balance_mode'));
     if (bs.learned) dp.setProperty('mono_balance_mode:' + k, bs.learned);
-    const skipLog = exp.skipped.map(it => ['skip:' + it.id, dateOf(it), round2_(it.amount / 100), String(it.description || ''), Number(it.mcc || 0), '', 0, 'так',
-      'пропущено: скасування ще не списаної оплати (у залишку банку його немає)', '']);
-    const res = bankIngest_(ss, { acc: acc, items: exp.ops, dateOf: dateOf, timeOf: timeOf, balShift: bs.shift, src: 'mono',
-      coverFrom: found.changed ? null : coverFrom, coverTo: found.changed ? null : today, extraLog: skipLog });
+    const res = bankIngest_(ss, { acc: acc, items: exp.ops, pending: exp.skipped, dateOf: dateOf, timeOf: timeOf, balShift: bs.shift, src: 'mono',
+      coverFrom: found.changed ? null : coverFrom, coverTo: found.changed ? null : today });
     const r = accReport_(acc, exp.ops, res, dateOf, today);
-    r.fees = exp.fees; r.skipped = exp.skipped.length;
+    r.fees = exp.fees;
     if (acc.kind === K_MAIN) {
       const own = (a.balance - a.creditLimit) / 100, limit = a.creditLimit / 100;
       r.checkpoints = upsertCheckpoints_(ss, checkpointPlan_(exp.ops, own, limit, days, dateOf));
@@ -485,7 +693,7 @@ function upsertCheckpoints_(ss, cps) {
 
 function importSummary_(r) {
   return 'нових операцій ' + r.drafts + (r.transfers ? ' (переказів ' + r.transfers + ')' : '') + (r.uncategorized ? ', без категорії ' + r.uncategorized : '') +
-    (r.facts ? ' · одразу «✅ факт» ' + r.facts : '') + (r.plans ? ' · закрито планів ' + r.plans : '') + (r.pairs ? ' · між своїми ' + r.pairs : '') + (r.learned ? ' · за історією ' + r.learned : '') +
+    (r.facts ? ' · одразу «✅ факт» ' + r.facts : '') + (r.plans ? ' · закрито планів ' + r.plans : '') + (r.pairs ? ' · між своїми ' + r.pairs : '') + (r.learned ? ' · за історією ' + r.learned : '') + (r.refunds ? ' · повернень ' + r.refunds : '') +
     ' · ваших рядків знайдено ' + r.matched + (r.other ? ' · з іншого джерела ' + r.other : '') + (r.lost ? ' · ⚠️ не вмістилось ' + r.lost : '') +
     (r.changed ? ' · ⚠️ розбіжностей сум ' + r.changed : '') + ((r.errors || []).length ? ' · ⚠️ ' + r.errors.join('; ') : '');
 }
@@ -499,6 +707,7 @@ function importReport_(r) {
   if (r.plans) lines.push('Закрито планів («Регулярні», «Борги»): <b>' + r.plans + '</b>: рядок плану став операцією з банку.');
   if (r.pairs) lines.push('Між своїми рахунками (пара сум на двох рахунках): <b>' + r.pairs + '</b>.');
   if (r.learned) lines.push('Категорія за історією (≥ 3 рази й ≥ 80 % однаково): <b>' + r.learned + '</b>.');
+  if (r.refunds) lines.push('↩ Повернень за покупки: <b>' + r.refunds + '</b>: мінусом у категорії покупки (витрати категорії зменшились).');
   r.notes.forEach(n => lines.push('ℹ️ ' + esc_(n) + '.'));
   (r.errors || []).forEach(n => lines.push('⚠️ ' + esc_(n)));
   if (r.fees) lines.push('Комісій окремими рядками «' + CAT_FEE + '»: ' + r.fees + '.');
@@ -536,6 +745,7 @@ function importText_(ss, r, meta) {
   if (drafts) lines.push('🏦 Чернетки чекають «✅ факт»: <b>' + drafts + '</b>');
   if (r.facts) lines.push('✅ Одразу факт: ' + r.facts);
   if (r.plans) lines.push('✓ Закрито планів: ' + r.plans);
+  if (r.refunds) lines.push('↩ Повернень за покупки: ' + r.refunds);
   if (r.transfers) lines.push('↔ Нових переказів: ' + r.transfers + ': оберіть категорію.');
   (r.errors || []).forEach(e => lines.push('⚠️ ' + esc_(e)));
   if (r.lost) lines.push('⚠️ Не вмістилось у журнал: ' + r.lost + '.');
@@ -559,5 +769,5 @@ function bankStatusLines_(ss) {
     (h.tg && h.tg !== 'ok' ? ' · Telegram: ' + esc_(h.tg) : '')).join('<br>'));
   const errAt = dp.getProperty('bank_last_error_at');
   if (dp.getProperty('bank_last_error') && errAt && errAt >= (dp.getProperty('bank_last_ok') || '')) lines.push('⚠️ Остання помилка (' + fmt(errAt) + '): ' + esc_(dp.getProperty('bank_last_error')));
-  return lines;
+  return lines.concat(periodStatusLines_(ss));
 }

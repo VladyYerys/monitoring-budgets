@@ -20,6 +20,7 @@ function onOpen() {
     .addItem('🚀 Підключення', 'startWizard')
     .addItem('🔃 Упорядкувати журнал зараз', 'sortNow')
     .addItem('🏦 Імпорт з банку зараз', 'importNow')
+    .addItem('🗓 Імпорт з банку за період…', 'monoPeriodNow')
     .addItem('📥 Імпорт виписок з папки', 'importStatements')
     .addItem('🔎 Сирі дані Mono', 'monoRawNow')
     .addItem('✅ Підтвердити чернетки з категорією', 'confirmDrafts')

@@ -14,6 +14,11 @@
  * Категорію визначено (правило, комісія, ФОП, між своїми, план, історія) → одразу «✅ факт» («Налаштування», B35: так).
  * Чернетками лишаються: червоний переказ, порожня категорія, «⏳ в обробці» (сума ще може змінитися, банк може скасувати);
  * коли «в обробці» завершилось і категорія є, наступний імпорт сам ставить «✅ факт».
+ * Повернення за покупку (версія 0.5.3): надходження з описом «Скасування. МАГАЗИН» (так пише Mono; також «Повернення», refund, reversal)
+ * або без слова, але той самий магазин і MCC, що в покупці. Шукаємо покупку цього рахунку в журналі: той самий магазин, сума не
+ * менша за повернення, до 60 днів тому. Рядок: категорія покупки, сума з мінусом («Одяг −1 200»), коментар «↩ повернення за покупку 12.11».
+ * Немає покупки: категорія з правила для магазину; немає й правила: чернетка без категорії. Без слова: завжди чернетка (перевірте).
+ * «Скасування … в обробці» за вже списаною покупкою: чернетка «⏳ в обробці» (сама стане фактом); за ще не списаною чи невідомою: пропуск, як і раніше.
  * Номер операції має приставку джерела: Mono без приставки, «pb:» ПриватБанк, «csv:» виписка.
  * * «Рахунки»: назва · банк · чий · вид (основна картка / інша картка / рахунок ФОП) · ФОП · ключ (відбиток, без номерів) · останній імпорт.
  * Основна картка: з неї «Дні» й контрольні точки. Інші картки сім'ї: у «мої» й «Місяці». Рахунок ФОП: лише «ФОП».
@@ -94,7 +99,7 @@ function catTypes_(ss) {
 function srcOf_(id) { id = String(id || ''); return id.indexOf('csv:') === 0 ? 'csv' : id.indexOf('pb:') === 0 ? 'pb' : 'mono'; }
 
 /**
- * Операції одного рахунку → журнал. src: { acc: {name, kind, who}, items, dateOf, timeOf, balShift?, coverFrom?, coverTo? }
+ * Операції одного рахунку → журнал. src: { acc: {name, kind, who}, items, pending? («Скасування … в обробці»), dateOf, timeOf, balShift?, coverFrom?, coverTo? }
  * → { plan, written, lost }
  */
 function bankIngest_(ss, src) {
@@ -102,7 +107,7 @@ function bankIngest_(ss, src) {
   const journal = readJournal_(ss);
   const lastLog = bankSh.getLastRow();
   const logged = new Set(lastLog >= BANK_LOG_FIRST ? bankSh.getRange(BANK_LOG_FIRST, 2, lastLog - BANK_LOG_FIRST + 1, 1).getValues().map(r => String(r[0])) : []);
-  const plan = planImport_({ items: src.items, journal: journal, logged: logged, rules: readRules_(ss), dateOf: src.dateOf, timeOf: src.timeOf,
+  const plan = planImport_({ items: src.items, pending: src.pending, journal: journal, logged: logged, rules: readRules_(ss), dateOf: src.dateOf, timeOf: src.timeOf,
     balShift: src.balShift, coverFrom: src.coverFrom, coverTo: src.coverTo, acc: src.acc, src: src.src || 'mono', types: catTypes_(ss), autoFact: autoFact_(ss) });
   (src.extraLog || []).forEach(l => { if (!logged.has(l[0])) plan.log.push(l); });
   const w = writeDrafts_(sh, journal, plan, tz, src.acc);
@@ -160,6 +165,45 @@ function findOtherSource_(journal, claimed, id, amt, key, accName) {
   const src = srcOf_(id);
   return journal.find(r => r.bank && r.bank[0] && !claimed[r.row] && srcOf_(r.bank[0]) !== src && r.key &&
     Math.abs(Number(r.bank[2]) - amt) < 0.005 && Math.abs(dayDiff_(r.key, key)) <= 1 && (r.acct === accName || (!r.acct && !accName))) || null;
+}
+
+/* ---------- повернення за покупку ---------- */
+
+const REFUND_RE = /^\s*(?:скасування|повернення|refund|reversal|cancel(?:lation)?)(?=[\s.:,-]|$)[\s.:,-]*/i;
+const REFUND_DAYS = 60, REFUND_NOTE = '↩ повернення';
+
+/** Чиста функція: назва магазину для порівняння (без регістру, лапок і розділових знаків). */
+function refundShop_(s) {
+  return String(s || '').toLowerCase().replace(/[«»"'ʼ’`]/g, '').replace(/[^0-9a-zа-яіїєґ]+/gi, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Чиста функція: чи це повернення за покупку і за яку. → null | { word, shop (текст після «Скасування.»), buy: рядок покупки | null }
+ * Покупка: рядок з банку цього рахунку (mine), списання, той самий магазин, не дешевша за повернення, від key−60 днів до key,
+ * з категорією (не переказ). Без слова «Скасування»: лише не переказ (MCC, опис), покупку знайдено й MCC той самий. Спершу ще не «зайняті» іншим
+ * поверненням, точна сума, найновіша.
+ */
+function refundOf_(it, journal, key, claimed, mine) {
+  const amt = round2_(Number(it.amount) / 100);
+  if (!(amt > 0) || it._fee) return null;
+  const desc = String(it.description || ''), m = desc.match(REFUND_RE), word = !!m, raw = word ? desc.slice(m[0].length).trim() : desc;
+  if (!word && isTransfer_(it)) return null;                       // переказ від людини з тією ж сумою: не повернення
+  const shop = refundShop_(raw), from = addDays_(key, -REFUND_DAYS);
+  let best = null, bestScore = null;
+  if (shop.length >= 2) journal.forEach(r => {
+    if (!r.bank || !r.bank[0] || !r.key || r.key > key || r.key < from || !(Number(r.bank[2]) < 0) || isPlan_(r.e)) return;
+    if (looseCat_(r.c) || r.c === CAT_OWN_MOVE || (mine && !mine(r))) return;
+    const s = refundShop_(r.bank[1]);
+    if (!(s === shop || (s.length >= 3 && shop.length >= 3 && (s.indexOf(shop) === 0 || shop.indexOf(s) === 0)))) return;
+    const paid = -Number(r.bank[2]);
+    if (amt > paid + 0.005 || (!word && Number(r.bank[3]) !== Number(it.mcc || 0))) return;
+    const score = [claimed && claimed[r.row] ? 1 : 0, Math.abs(paid - amt) < 0.005 ? 0 : 1, -dayDiff_(r.key, from)];
+    if (!bestScore || score[0] < bestScore[0] || (score[0] === bestScore[0] && (score[1] < bestScore[1] || (score[1] === bestScore[1] && score[2] < bestScore[2])))) {
+      best = r; bestScore = score;
+    }
+  });
+  if (!word && !best) return null;
+  return { word: word, shop: raw, buy: best };
 }
 
 /* ---------- без правила: між своїми, план, історія ---------- */
@@ -231,13 +275,13 @@ function histGuess_(hist, amt, desc) {
 function planImport_(ctx) {
   const acc = ctx.acc || { name: '', kind: K_MAIN, who: '' };
   const out = { drafts: [], marks: [], takes: [], recats: [], updates: [], log: [], vanish: [],
-    stats: { transfers: 0, uncategorized: 0, changed: 0, resized: 0, redated: 0, other: 0, own: 0, plans: 0, learned: 0, facts: 0 } };
+    stats: { transfers: 0, uncategorized: 0, changed: 0, resized: 0, redated: 0, other: 0, own: 0, plans: 0, learned: 0, facts: 0, refunds: 0, skipped: 0 } };
   const HOLD_NOTE = ' · ⏳ в обробці', statusOf = (cat, hold) => ctx.autoFact && !hold && !looseCat_(cat) ? STATUS_FACT : STATUS_DRAFT;
   const hist = histMap_(ctx.journal), pairClaimed = {}, planClaimed = {};
   const mine = r => r.acct === acc.name || (!r.acct && acc.kind === K_MAIN);
   if (ctx.coverFrom && ctx.coverTo) {                     // чернетки цього рахунку, яких у виписці за повністю охоплені дні вже немає: банк скасував
     const ids = {};
-    ctx.items.forEach(it => { ids[String(it.id)] = 1; });
+    ctx.items.concat(ctx.pending || []).forEach(it => { ids[String(it.id)] = 1; });
     ctx.journal.forEach(r => {
       const id = r.bank && r.bank[0] ? String(r.bank[0]) : '';
       if (!id || r.e !== STATUS_DRAFT || ids[id] || !mine(r) || srcOf_(id) !== (ctx.src || 'mono') ||
@@ -248,8 +292,15 @@ function planImport_(ctx) {
   }
   const byId = {};
   ctx.journal.forEach(r => { if (r.bank && r.bank[0]) byId[String(r.bank[0])] = r; });
-  const claimed = {}, feeInRow = {};
-  ctx.items.slice().sort((a, b) => a.time - b.time).forEach(it => {
+  const claimed = {}, feeInRow = {}, refundClaimed = {}, pendTake = [];
+  (ctx.pending || []).forEach(it => {                     // «Скасування … в обробці»: повернення за вже списану покупку беремо, решту пропускаємо
+    const id = String(it.id), key = ctx.dateOf(it), rf = byId[id] ? null : refundOf_(it, ctx.journal, key, null, mine);
+    if (byId[id] || (rf && rf.buy && String(rf.buy.d || '').indexOf('⏳') < 0)) { pendTake.push(it); return; }
+    out.stats.skipped++;
+    if (!ctx.logged.has('skip:' + id)) out.log.push(['skip:' + id, key, round2_(it.amount / 100), String(it.description || ''), Number(it.mcc || 0), '', 0, 'так',
+      'пропущено: скасування ще не списаної оплати (у залишку банку його немає)', '']);
+  });
+  ctx.items.concat(pendTake).sort((a, b) => a.time - b.time).forEach(it => {
     const id = String(it.id), amt = round2_(it.amount / 100), abs = Math.abs(amt), key = ctx.dateOf(it);
     const own = typeof it._bal === 'number' && typeof ctx.balShift === 'number' ? round2_((it._bal - ctx.balShift) / 100) : '';
     const bank = [id, String(it.description || ''), amt, Number(it.mcc || 0), ctx.timeOf(it), own];
@@ -257,16 +308,17 @@ function planImport_(ctx) {
       round2_((it._feeSplit || it.commissionRate || 0) / 100), it.hold ? 'так' : ''];
     const row = byId[id];
     if (row) {                                            // уже в журналі: без дубля; чернетку уточнюємо
-      const draft = row.e === STATUS_DRAFT, sumDiff = Math.abs(Number(row.b) - abs) >= 0.005, keyDiff = draft && row.key !== key;
+      const want = Number(row.b) < 0 ? -abs : abs;        // повернення записане мінусом
+      const draft = row.e === STATUS_DRAFT, sumDiff = Math.abs(Number(row.b) - want) >= 0.005, keyDiff = draft && row.key !== key;
       const old = row.bank || [];
       const balDiff = own !== '' && (old[5] === '' || old[5] === null || old[5] === undefined || Math.abs(Number(old[5]) - own) >= 0.005);
       if (sumDiff && !draft) { out.stats.changed++; out.log.push(base.concat(['⚠️ сума в банку ' + abs + ', у журналі ' + row.b + ', перевірте', row.row])); }
       const promote = draft && ctx.autoFact && !it.hold && !looseCat_(row.c) && row.d.indexOf('⏳ в обробці') >= 0;   // «в обробці» завершилось
       if (promote) { out.stats.facts++; out.log.push(base.concat(['«в обробці» завершилось: ✅ факт', row.row])); }
       if ((sumDiff && draft) || keyDiff || balDiff || promote) {
-        out.updates.push({ row: row.row, b: sumDiff && draft ? abs : null, key: keyDiff ? key : null, bank: bank,
+        out.updates.push({ row: row.row, b: sumDiff && draft ? want : null, key: keyDiff ? key : null, bank: bank,
           e: promote ? STATUS_FACT : null, d: promote ? row.d.replace(HOLD_NOTE, '').replace('⏳ в обробці', '').replace(/ · $/, '') : null });
-        if (sumDiff && draft) { out.stats.resized++; out.log.push(base.concat(['сума уточнилась: ' + row.b + ' → ' + abs, row.row])); }
+        if (sumDiff && draft) { out.stats.resized++; out.log.push(base.concat(['сума уточнилась: ' + row.b + ' → ' + want, row.row])); }
         if (keyDiff) { out.stats.redated++; out.log.push(base.concat(['дату уточнено: ' + row.key + ' → ' + key, row.row])); }
       }
       return;
@@ -277,6 +329,7 @@ function planImport_(ctx) {
     if (other) { claimed[other.row] = 1; out.stats.other++; out.log.push(base.concat(['✓ уже є (прийшла з іншого джерела: ' + other.bank[0] + ')', other.row])); return; }
     const findRow = target => findManual_(ctx.journal, claimed, target, amt, key);
     let best = findRow(abs), withFee = false;
+    if (!best && amt > 0) best = findRow(-abs);                         // ваш рядок повернення з мінусом
     if (!best && it._feeSplit) { best = findRow(round2_(abs + it._feeSplit / 100)); withFee = !!best; }
     if (best) {
       claimed[best.r.row] = 1;
@@ -285,9 +338,28 @@ function planImport_(ctx) {
       out.log.push(base.concat(['✓ уже є у журналі (ваш рядок' + (withFee ? ', разом із комісією' : '') + ')', best.r.row]));
       return;
     }
+    const ts = Number(it.time) * 1000 || '';
+    const rf = refundOf_(it, ctx.journal, key, refundClaimed, mine);
+    if (rf) {                                                             // повернення за покупку: категорія покупки, сума з мінусом
+      let cat = rf.buy ? rf.buy.c : '', why = rf.buy ? 'за покупку ' + dd_(rf.buy.key) : '';
+      if (!cat) {
+        const rr = matchRule_(ctx.rules, { desc: rf.shop, comment: it.comment, mcc: it.mcc, cname: it.counterName, ciban: it.counterIban, cedrpou: it.counterEdrpou }, -amt, false);
+        if (rr) { cat = rr.category; why = 'правило: ' + rr.text.slice(0, 40); }
+      }
+      if (rf.buy) refundClaimed[rf.buy.row] = 1;
+      const e = rf.word ? statusOf(cat, it.hold) : STATUS_DRAFT;
+      out.stats.refunds++;
+      if (e === STATUS_FACT) out.stats.facts++;
+      if (!cat) out.stats.uncategorized++;
+      const note = [REFUND_NOTE + (rf.buy ? ' за покупку ' + dd_(rf.buy.key) : cat ? '' : ': оберіть категорію покупки') + (rf.word ? '' : ' (перевірте: схоже на повернення)'),
+        noteFor_(it, -amt)].filter(Boolean).join(' · ');
+      const log = base.concat([(e === STATUS_FACT ? '✅ факт' : 'чернетка') + ' ' + REFUND_NOTE + (cat ? ' → ' + cat + ', мінусом' : ' (без категорії)') + (why ? ' (' + why + ')' : ''), '']);
+      out.drafts.push({ key: key, b: -abs, c: cat, d: note, e: e, f: '', g: acc.who || '', bank: bank, log: log, ts: ts });
+      out.log.push(log);
+      return;
+    }
     const cz = categorize_(it, amt, ctx.rules, acc), rule = cz.rule;
     let cat = cz.cat, why = rule ? 'правило: ' + rule.text.slice(0, 40) : '', note = noteFor_(it, amt);
-    const ts = Number(it.time) * 1000 || '';
     if (looseCat_(cat) && !it._fee) {
       const pair = findOwnPair_(ctx.journal, pairClaimed, amt, key, acc.name);
       if (pair) {                                                         // 1) між своїми: обидва рядки

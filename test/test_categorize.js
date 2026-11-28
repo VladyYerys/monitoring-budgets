@@ -258,4 +258,121 @@ t('upgrade of a version-13 table to 14: «одразу «✅ факт»» row ad
   assert.strictEqual(c.autoFact_(env.ss), false);
 });
 
+/* ---------- ↩ повернення за покупку (0.5.3) ---------- */
+
+function refundCtx(env, items, journal, extra) {
+  const c = env.ctx;
+  return Object.assign({ items: items, journal: journal, logged: new Set(), rules: c.readRules_(env.ss), dateOf: it => it.k, timeOf: () => '27.11.2026 01:24',
+    acc: { name: 'Mono Чорна *4321', kind: 'основна картка', who: '' }, types: c.catTypes_(env.ss), autoFact: true }, extra || {});
+}
+const jr = o => Object.assign({ row: 100, key: '2026-11-21', b: 0, c: '', d: '', e: '✅ факт', bank: ['', '', '', '', '', ''], acct: '', blank: false, l: '' }, o);
+const buy = (row, key, amt, cat, extra) => jr(Object.assign({ row: row, key: key, b: amt, c: cat, bank: ['b' + row, 'MEBLIMAX', -amt, 5712, '', ''] }, extra || {}));
+const refund = (id, k, amt, o) => Object.assign({ id: id, k: k, time: 1000 + Number(id.replace(/\D/g, '') || 0), amount: Math.round(amt * 100), description: 'Скасування. MEBLIMAX', mcc: 5712 }, o || {});
+
+t('↩ refund «Скасування. МАГАЗИН»: the purchase category with a minus, «✅ факт», a note with the purchase date; partial refunds too; bigger than the purchase, older than 60 days or another account: no purchase, so a rule or a draft without category', () => {
+  const env = setup(), c = env.ctx;
+  let p = c.planImport_(refundCtx(env, [refund('r1', '2026-11-27', 525)], [buy(50, '2026-11-21', 525, 'Дім і побут')]));
+  const d = p.drafts[0];
+  assert.strictEqual(JSON.stringify([d.b, d.c, d.e]), JSON.stringify([-525, 'Дім і побут', '✅ факт']));
+  assert.ok(/^↩ повернення за покупку 21\.11 · Скасування\. MEBLIMAX$/.test(d.d), d.d);
+  assert.strictEqual(p.stats.refunds, 1); assert.strictEqual(p.stats.facts, 1); assert.strictEqual(p.stats.uncategorized, 0); assert.strictEqual(p.stats.transfers, 0);
+  assert.ok(/↩ повернення → Дім і побут, мінусом \(за покупку 21\.11\)/.test(p.log[0][8]), p.log[0][8]);
+  // частково (200 з 525): та сама покупка
+  p = c.planImport_(refundCtx(env, [refund('r2', '2026-11-27', 200)], [buy(50, '2026-11-21', 525, 'Дім і побут')]));
+  assert.strictEqual(p.drafts[0].b, -200); assert.strictEqual(p.drafts[0].c, 'Дім і побут');
+  // більше за покупку, старше 60 днів, інший рахунок: покупки немає → без правила: чернетка без категорії, мінусом
+  const odd = { mcc: 7999 };                                            // MCC без стартового правила
+  [[refund('r3', '2026-11-27', 600, odd), buy(50, '2026-11-21', 525, 'Дім і побут')],
+   [refund('r4', '2026-11-27', 525, odd), buy(50, '2026-09-27', 525, 'Дім і побут')],
+   [refund('r5', '2026-11-27', 525, odd), buy(50, '2026-11-21', 525, 'Дім і побут', { acct: 'Приват' })]].forEach(x => {
+    const q = c.planImport_(refundCtx(env, [x[0]], [x[1]]));
+    assert.strictEqual(JSON.stringify([q.drafts[0].b, q.drafts[0].c, q.drafts[0].e]), JSON.stringify([-x[0].amount / 100, '', '🏦 чернетка']), x[0].id);
+    assert.ok(/^↩ повернення: оберіть категорію покупки/.test(q.drafts[0].d), q.drafts[0].d);
+    assert.strictEqual(q.stats.uncategorized, 1); assert.strictEqual(q.stats.refunds, 1);
+  });
+  // покупки немає, але MCC магазину має стартове правило (меблі → «Дім і побут»): воно
+  p = c.planImport_(refundCtx(env, [refund('r9', '2026-11-27', 600)], [buy(50, '2026-11-21', 525, 'Подарунки')]));
+  assert.strictEqual(JSON.stringify([p.drafts[0].c, p.drafts[0].e]), JSON.stringify(['Дім і побут', '✅ факт']));
+  // покупки немає, але є правило магазину (стартове «АТБ» → Продукти, для списань): воно
+  p = c.planImport_(refundCtx(env, [refund('r6', '2026-11-27', 99.9, { description: 'Скасування. АТБ', mcc: 5411 })], []));
+  assert.strictEqual(JSON.stringify([p.drafts[0].b, p.drafts[0].c, p.drafts[0].e]), JSON.stringify([-99.9, 'Продукти', '✅ факт']));
+  // два повернення по 525 за дві покупки: кожне своїй (новіша спершу)
+  p = c.planImport_(refundCtx(env, [refund('r7', '2026-11-27', 525), refund('r8', '2026-11-27', 525)],
+    [buy(50, '2026-11-21', 525, 'Дім і побут'), buy(51, '2026-11-10', 525, 'Подарунки')]));
+  assert.strictEqual(JSON.stringify(p.drafts.map(x => [x.c, x.d.slice(0, 29)])),
+    JSON.stringify([['Дім і побут', '↩ повернення за покупку 21.11'], ['Подарунки', '↩ повернення за покупку 10.11']]));
+});
+
+t('↩ refund without the word: same shop and MCC as a purchase → a draft with the purchase category (check it); other MCC or a person-to-person transfer: not a refund; your own −525 row is not duplicated', () => {
+  const env = setup(), c = env.ctx;
+  let p = c.planImport_(refundCtx(env, [refund('w1', '2026-11-27', 525, { description: 'MEBLIMAX' })], [buy(50, '2026-11-21', 525, 'Дім і побут')]));
+  assert.strictEqual(JSON.stringify([p.drafts[0].b, p.drafts[0].c, p.drafts[0].e]), JSON.stringify([-525, 'Дім і побут', '🏦 чернетка']));
+  assert.ok(/перевірте: схоже на повернення/.test(p.drafts[0].d), p.drafts[0].d);
+  p = c.planImport_(refundCtx(env, [refund('w2', '2026-11-27', 525, { description: 'MEBLIMAX', mcc: 5999 })], [buy(50, '2026-11-21', 525, 'Дім і побут')]));
+  assert.strictEqual(p.stats.refunds, 0); assert.ok(p.drafts[0].b > 0, 'інший MCC: звичайне надходження');
+  // ваш рядок «−525 Дім і побут» без номера банку: операція банку пристає до нього
+  p = c.planImport_(refundCtx(env, [refund('w3', '2026-11-27', 525)], [jr({ row: 90, key: '2026-11-27', b: -525, c: 'Дім і побут', l: 525 })]));
+  assert.strictEqual(p.drafts.length, 0); assert.strictEqual(p.marks[0].row, 90);
+});
+
+t('↩ «Скасування … в обробці»: for a purchase already settled it is a draft «⏳ в обробці» (not removed as «cancelled by bank»); for a pending purchase or no purchase it is skipped as before; when settled it becomes a fact and keeps the minus', () => {
+  const env = setup(), c = env.ctx, held = refund('h1', '2026-11-27', 525, { hold: true });
+  let p = c.planImport_(refundCtx(env, [], [buy(50, '2026-11-21', 525, 'Дім і побут')], { pending: [held] }));
+  assert.strictEqual(JSON.stringify([p.drafts[0].b, p.drafts[0].c, p.drafts[0].e]), JSON.stringify([-525, 'Дім і побут', '🏦 чернетка']));
+  assert.ok(/⏳ в обробці/.test(p.drafts[0].d)); assert.strictEqual(p.stats.skipped, 0);
+  // покупка ще «в обробці» (банк скасовує неcписану оплату) чи покупки немає: пропуск, рядок у журналі «Банк» один раз
+  [[buy(50, '2026-11-25', 525, 'Дім і побут', { e: '🏦 чернетка', d: 'MEBLIMAX · ⏳ в обробці' })], []].forEach(j => {
+    const q = c.planImport_(refundCtx(env, [], j, { pending: [held] }));
+    assert.strictEqual(q.drafts.length, 0); assert.strictEqual(q.stats.skipped, 1); assert.strictEqual(q.log[0][0], 'skip:h1');
+    assert.strictEqual(c.planImport_(refundCtx(env, [], j, { pending: [held], logged: new Set(['skip:h1']) })).log.length, 0);
+  });
+  // уже в журналі чернеткою «в обробці»: не прибирається, поки Mono тримає її «в обробці»
+  const draft = jr({ row: 60, key: '2026-11-27', b: -525, c: 'Дім і побут', e: '🏦 чернетка', d: '↩ повернення за покупку 21.11 · Скасування. MEBLIMAX · ⏳ в обробці',
+    bank: ['h1', 'Скасування. MEBLIMAX', 525, 5712, '', ''] });
+  p = c.planImport_(refundCtx(env, [], [buy(50, '2026-11-21', 525, 'Дім і побут'), draft], { pending: [held], coverFrom: '2026-11-25', coverTo: '2026-11-28' }));
+  assert.strictEqual(p.vanish.length, 0); assert.strictEqual(p.updates.length, 0);
+  // проведено: «✅ факт», сума лишається −525
+  p = c.planImport_(refundCtx(env, [refund('h1', '2026-11-27', 525)], [buy(50, '2026-11-21', 525, 'Дім і побут'), draft]));
+  assert.strictEqual(p.updates.length, 1); assert.strictEqual(p.updates[0].b, null, 'мінус не перетворюється на плюс'); assert.strictEqual(p.updates[0].e, '✅ факт');
+  assert.ok(!/⏳/.test(p.updates[0].d)); assert.strictEqual(p.stats.changed, 0);
+});
+
+t('↩ refund through the Mono import: purchase, then «Скасування. …» in processing, then settled; the journal has −525 in the purchase category; report and Telegram text count refunds; the raw window marks it', () => {
+  const env = setup(), c = env.ctx, k0 = day(env, -3), k1 = day(env, 0);
+  env.state.items = [{ id: 'p1', time: sec(env, k0, '15:26'), description: 'MEBLIMAX', mcc: 5712, amount: -52500, balance: 3947500 }];
+  c.connectMono();
+  c.importBank_(env.ss);
+  const row = id => c.readJournal_(env.ss).find(o => o.bank[0] === id);
+  env.ss.getSheetByName('Журнал').getRange(row('p1').row, 3).setValue('Дім і побут');        // ви поставили категорію покупці
+  env.state.items.push({ id: 'r1', time: sec(env, k1, '01:24'), description: 'Скасування. MEBLIMAX', mcc: 5712, amount: 52500, hold: true, balance: 3947500 });
+  let r = c.importBank_(env.ss);
+  assert.strictEqual(JSON.stringify([row('r1').b, row('r1').c, row('r1').e]), JSON.stringify([-525, 'Дім і побут', '🏦 чернетка']));
+  assert.strictEqual(r.refunds, 1); assert.strictEqual(r.skipped, 0);
+  assert.ok(c.importReport_(r).some(l => /Повернень за покупки: <b>1<\/b>/.test(l)));
+  env.state.items[1].hold = false;
+  r = c.importBank_(env.ss);
+  assert.strictEqual(JSON.stringify([row('r1').b, row('r1').c, row('r1').e]), JSON.stringify([-525, 'Дім і побут', '✅ факт']));
+  assert.strictEqual(c.readJournal_(env.ss).filter(o => o.bank[0] === 'r1').length, 1);
+  assert.ok(/↩ Повернень за покупки: 1/.test(c.importText_(env.ss, Object.assign(c.emptyReport_(), { refunds: 1, accounts: [] }), { at: '12:45', attempt: 0 })));
+  const raw = c.rawRows_([env.state.items[1]], c.readRules_(env.ss), { name: 'x', kind: 'основна картка' }, () => '', {});
+  assert.ok(/↩ повернення/.test(raw.rows[0].cat), raw.rows[0].cat);
+});
+
+t('↩ formulas: «Списання» (T) counts a minus in expenses as money back to «мої»; upgrade of a version-15 table to 16 rewrites only T and the hint', () => {
+  const env = setup(), c = env.ctx, T = K(c, 'journalFormulas_()').T;
+  assert.ok(T.indexOf('IF(OR(N(AH{r})<0,AND(N(O{r})<0,N(AH{r})>0)),O{r},0)') >= 0, T);
+  const j = env.ss.getSheetByName('Журнал'), old = '=IF(OR(Q5="",N(Q5)<1,AG5="рахунок ФОП"),0,IF(N(AH5)<0,O5,0))';
+  j.getRange('T5').setFormula(old); j.getRange('T3004').setFormula(old.replace(/5/g, '3004'));
+  const s0 = j.getRange('S5').getFormula();
+  j.getRange('A3').setNote('Пишіть у рядки нижче жовтої лінії: дата, сума (завжди додатна), категорія зі списку, статус.');
+  env.docProps.setProperty('schema_v', '15');
+  assert.strictEqual(K(c, 'STEPS').find(x => x.v === 16).done(env.ss), false);
+  assert.strictEqual(c.schemaTick_(env.ss), true);
+  assert.strictEqual(env.docProps.getProperty('schema_v'), '16');
+  assert.strictEqual(j.getRange('T5').getFormula(), T.split('{r}').join('5'));
+  assert.strictEqual(j.getRange('S5').getFormula(), s0, 'інші колонки не чіпали');
+  assert.ok(/з мінусом, у категорії покупки/.test(j.getRange('A3').getNotes()[0][0]), j.getRange('A3').getNotes()[0][0]);
+  assert.strictEqual(K(c, 'STEPS').find(x => x.v === 16).done(env.ss), true);
+});
+
 console.log(n + ' tests passed');

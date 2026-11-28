@@ -40,6 +40,8 @@ const STEPS = [
     done: ss => !ss.getSheetByName(SETTINGS_SHEET) || String(ss.getSheetByName(SETTINGS_SHEET).getRange('A35').getValue()) === AUTO_FACT_LABEL },
   { v: 15, title: '⚡ «Старт» став «Швидким підключенням»: стан таблиці й покрокова інструкція для ШІ (Gemini чи іншого)', auto: ss => stepQuick15_(ss),
     done: ss => !ss.getSheetByName(START_OLD) && !!ss.getSheetByName(START_SHEET) && String(ss.getSheetByName(START_SHEET).getRange('A1').getValue()) === QUICK_TITLE },
+  { v: 16, title: '↩ Повернення за покупку: мінус у категорії покупки зменшує її витрати й повертає гроші в «мої»; імпорт з банку розпізнає «Скасування. …»',
+    auto: ss => stepRefund16_(ss), done: ss => !ss.getSheetByName(JOURNAL) || refundFormulaOk_(ss) },
 ];
 /** Остання версія таблиці в цьому коді. */
 function schemaLast_() { return STEPS[STEPS.length - 1].v; }
@@ -250,6 +252,26 @@ function stepQuick15_(ss) {
   sheetsVisibility_(ss);
   if (PropertiesService.getDocumentProperties().getProperty('prot') !== 'off' && modOn_('backup')) { try { applyProtection_(ss); } catch (e) { /* захист: наступного разу */ } }
   return ['Оновлено: ' + out.join('; ') + '.', 'Відкрийте Gemini в таблиці (чи інший ШІ) і напишіть: «Прочитай аркуш «' + START_SHEET + '» і налаштуй зі мною таблицю».'];
+}
+
+/** Колонка T журналу вже з поверненнями (перший і останній рядок). */
+function refundFormulaOk_(ss) {
+  const sh = ss.getSheetByName(JOURNAL), f = journalFormulas_().T, col = colNum_(JC.out);
+  return sh.getRange(J_FIRST, col).getFormula() === rowF_(f, J_FIRST) && sh.getRange(J_LAST, col).getFormula() === rowF_(f, J_LAST);
+}
+
+/** Версія 16: формула «Списання» (T) рахує мінус у витратах як повернення; підказка про суму. Ваші рядки й інші колонки не змінюються. */
+function stepRefund16_(ss) {
+  const sh = ss.getSheetByName(JOURNAL);
+  if (!sh) return ['Журналу немає: нічого оновлювати.'];
+  const f = journalFormulas_().T, rows = [];
+  for (let r = J_FIRST; r <= J_LAST; r++) rows.push([rowF_(f, r)]);
+  setF_(sh.getRange(J_FIRST, colNum_(JC.out), rows.length, 1), rows);
+  if (headerIsNew_(ss)) sh.getRange('A3').setNote(headerNote_());
+  else if (/завжди додатна/.test(String(sh.getRange(2, 1).getValue()))) sh.getRange(2, 1).setValue(String(sh.getRange(2, 1).getValue()).replace('сума (завжди додатна)', J_SUM_HINT));
+  try { startRefresh_(ss); } catch (e) { /* «Швидке підключення» оновиться завтра */ }
+  return ['Повернення за покупку: пишіть суму з мінусом у категорії покупки (наприклад, «Одяг −1 200»). Витрати категорії зменшаться, гроші повернуться в «мої».',
+    'Імпорт з банку робить це сам для «Скасування. …» від Mono: бере категорію покупки з журналу.'];
 }
 
 /** Блок модулів має рядок для кожного модуля (нові модулі дописуються в кінець). */
