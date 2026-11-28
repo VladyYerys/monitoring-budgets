@@ -17,6 +17,10 @@
  * Шапка (рядки 1–3, версія 18): темні плитки в стилі Grafana, як «Charts»: 💰 собі й інвестиції (першою), 🔁 підключено,
  * 💵 лишається з доходу, 📅 цей місяць, ⏭ найближчі 30 днів (графік по днях), 💳 борги (K:L, з модулем). Усе формулами;
  * службові колонки N…U сховані (на місяць, тип, дні, підсумки, параметри графіків). Пояснення: примітки на заголовках (рядок 4).
+ * Порядок і кольори (версія 20): угорі «Заплати собі» й «Інвестиції» (і приклади), далі ваші рядки в тому ж порядку, далі приклади
+ * шаблону з «ні», далі порожні. Додали свій рядок унизу: при наступному оновленні (≈ хвилина після правки) він стає над прикладами.
+ * Кольори: увімкнений рядок має колір групи категорії («Довідник», C; для доходу, заощаджень, боргів, податків, резерву: за типом),
+ * вимкнений (і приклади) сірий. Службова колонка P: ключ кольору.
  */
 
 const REG_SHEET = 'Регулярні';
@@ -244,6 +248,76 @@ function regHeader_(ss) {
   return true;
 }
 
+/* ---------- порядок рядків і кольори (версія 20) ---------- */
+
+const REG_TOP = [CAT_SELF, CAT_INVEST];
+/** Чиста функція: група рядка для порядку. 0: «Заплати собі» й «Інвестиції», 1: ваші, 2: приклади шаблону з «ні», 3: порожні. */
+function regRank_(r, note) {
+  const name = String(r[0]).trim(), cat = String(r[1]).trim();
+  if (!r.slice(0, 9).some(v => v !== '' && v !== null)) return 3;
+  if (REG_TOP.indexOf(cat) >= 0) return 0;
+  const ex = String(note || '').indexOf(REG_EX_MARK) === 0 && REG_EXAMPLES.some(x => x[0] === name) && String(r[8]).trim() === MOD_NO;
+  return ex ? 2 : 1;
+}
+
+/** Переставити рядки: «Заплати собі» й «Інвестиції», ваші, приклади, порожні (усередині групи порядок той самий). → чи переставлено */
+function regOrder_(ss) {
+  const sh = ss.getSheetByName(REG_SHEET);
+  if (!sh) return false;
+  const n = REG_LAST - REG_FIRST + 1, rng = sh.getRange(REG_FIRST, 1, n, REG_COLS.length);
+  const v = rng.getValues(), notes = sh.getRange(REG_FIRST, 1, n, 1).getNotes().map(x => x[0]);
+  const idx = v.map((r, i) => ({ i: i, k: regRank_(r, notes[i]), t: REG_TOP.indexOf(String(r[1]).trim()) }));
+  idx.sort((a, b) => a.k - b.k || (a.k === 0 ? a.t - b.t : 0) || a.i - b.i);
+  if (idx.every((x, j) => x.i === j)) return false;
+  rng.setValues(idx.map(x => v[x.i]));
+  sh.getRange(REG_FIRST, 1, n, 1).setNotes(idx.map(x => [notes[x.i] || '']));
+  return true;
+}
+
+/** Палітра кольорів: тип чи слово з назви групи → фон увімкненого рядка. Невідомі групи: по колу з запасних. */
+const REG_PAL_TYPE = [['self', '#e6d9fb'], [T_IN, '#d4f0da'], [T_SAVE, '#e6dff8'], [T_DEBT, '#f9d9de'], [T_TAX, '#fde2c8'], [T_RESERVE, '#fff0bf']];
+const REG_PAL_WORD = [[/дім|житл|комун/i, '#fde3cf'], [/підписк|навчан/i, '#d5e6fb'], [/транспорт|таксі|авто/i, '#d0eeeb'], [/їжа|кава|доставк|продукт/i, '#faf0c2'],
+  [/діти|тварин/i, '#f9d8ec'], [/розваг|подарун/i, '#ecdcfa'], [/покупк/i, '#d5eff6'], [/благод/i, '#e0f0d0'], [/здоров|догляд/i, '#fbe0e0']];
+const REG_PAL_MORE = ['#e3ecf9', '#e8f4e0', '#f6e6f0', '#f3ecd9'], REG_OFF_BG = '#f6f7f8', REG_OFF_FG = '#9aa0a6';
+
+/** Чиста функція: [[ключ, колір]] для типів і груп витрат з «Довідника». */
+function regPalette_(groups) {
+  let k = 0;
+  return REG_PAL_TYPE.concat(groups.filter((g, i) => g && groups.indexOf(g) === i).map(g => {
+    const w = REG_PAL_WORD.find(x => x[0].test(g));
+    return [g, w ? w[1] : REG_PAL_MORE[k++ % REG_PAL_MORE.length]];
+  }));
+}
+
+/** Кольори рядків (умовне форматування A…J): вимкнені сірі; увімкнені: колір групи. Переписує лише свої правила, коли змінились групи. */
+function regColors_(ss, force) {
+  const sh = ss.getSheetByName(REG_SHEET), d = ss.getSheetByName(DICT_SHEET);
+  if (!sh || !d) return false;
+  const groups = d.getRange(D_FIRST, 1, D_LAST - D_FIRST + 1, 3).getValues().filter(r => r[0] && String(r[1]) === T_SPEND).map(r => String(r[2]).trim());
+  const pal = regPalette_(groups), sig = md5Short_(JSON.stringify(pal));
+  const dp = PropertiesService.getDocumentProperties();
+  if (!force && dp.getProperty('reg_colors') === sig) return false;
+  // P: ключ кольору (своя категорія «собі»/«інвестиції», тип або група витрат)
+  const P = [];
+  for (let r = REG_FIRST; r <= REG_LAST; r++) {
+    P.push(['=IF($A' + r + '="","",IF(OR(' + REG_TOP.map(c => '$B' + r + '="' + c + '"').join(',') + '),"self",IF($' + RH.type + r + '="' + T_SPEND + '",IFERROR(VLOOKUP($B' + r +
+      ",'" + DICT_SHEET + "'!$A$" + D_FIRST + ':$C$' + D_LAST + ',3,FALSE),""),$' + RH.type + r + ')))']);
+  }
+  ensureSize_(sh, REG_LAST, colNum_(RH.last));
+  setF_(sh.getRange(REG_FIRST, colNum_('P'), P.length, 1), P);
+  sh.getRange(REG_HEAD, colNum_('P')).setValue('колір');
+  const area = sh.getRange(REG_FIRST, 1, REG_LAST - REG_FIRST + 1, REG_COLS.length), r0 = REG_FIRST;
+  const mine = rule => { try { const c = rule.getBooleanCondition(); return rule.getRanges().every(g => g.getRow() === r0) && c && String(c.getCriteriaValues()[0]).indexOf('$I' + r0) >= 0; } catch (e) { return false; } };
+  const keep = sh.getConditionalFormatRules().filter(rule => !mine(rule));
+  const F = (f, bg, fg) => { const b = SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied(f).setBackground(bg).setRanges([area]); if (fg) b.setFontColor(fg); return b.build(); };
+  const rules = [F('=AND($A' + r0 + '<>"",$I' + r0 + '<>"так")', REG_OFF_BG, REG_OFF_FG)]
+    .concat(pal.map(p => F('=AND($I' + r0 + '="так",$P' + r0 + '="' + String(p[0]).replace(/"/g, '""') + '")', p[1], '#202124')))
+    .concat([F('=AND($A' + r0 + '<>"",$I' + r0 + '="так")', REG_PAL_MORE[0], '#202124')]);
+  sh.setConditionalFormatRules(rules.concat(keep));
+  dp.setProperty('reg_colors', sig);
+  return true;
+}
+
 /** Шапка «Регулярних» нового вигляду? (крок 18) */
 function regHeaderNew_(ss) {
   const sh = ss.getSheetByName(REG_SHEET);
@@ -331,11 +405,12 @@ function regWanted_(rules, rows, today, horizon) {
   return { want: want, paid: paid, state: state };
 }
 
-/** Плани з «Регулярних» у журналі й колонка «Стан». → { added, updated, removed } */
+/** Плани з «Регулярних» у журналі й колонка «Стан». Спершу порядок рядків і кольори. → { added, updated, removed } */
 function regPlansSync_(ss) {
   const st = { added: 0, updated: 0, removed: 0 };
   const sh = ss.getSheetByName(REG_SHEET);
   if (!ss.getSheetByName(JOURNAL) || !sh) return st;
+  try { regOrder_(ss); regColors_(ss); } catch (e) { /* порядок і кольори наведе наступне оновлення */ }
   const today = todayKey_(ss), rows = readJournal_(ss), rules = regList_(ss);
   const horizon = lastDayOf_(addDays_(lastDayOf_(today.slice(0, 7)), 1).slice(0, 7));
   const w = regWanted_(rules, rows, today, horizon);

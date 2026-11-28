@@ -48,6 +48,8 @@ const STEPS = [
     auto: ss => stepReg18_(ss), done: ss => !ss.getSheetByName(REG_SHEET) || regHeaderNew_(ss) },
   { v: 19, title: '🗓 «Вільно» наступного місяця з «моїх» (дохід мінус відкладене, плани й бюджети), «Мін.» лише від сьогодні',
     auto: ss => stepFree19_(ss), done: ss => freeNew_(ss) },
+  { v: 20, title: '🎨 «Регулярні»: угорі «Заплати собі» й «Інвестиції», далі ваші рядки, приклади внизу; кольори груп, вимкнені сірі',
+    auto: ss => stepRegOrder20_(ss), done: ss => !ss.getSheetByName(REG_SHEET) || String(ss.getSheetByName(REG_SHEET).getRange('P' + REG_FIRST).getFormula()) !== '' },
 ];
 /** Остання версія таблиці в цьому коді. */
 function schemaLast_() { return STEPS[STEPS.length - 1].v; }
@@ -278,6 +280,14 @@ function stepRefund16_(ss) {
   try { startRefresh_(ss); } catch (e) { /* «Швидке підключення» оновиться завтра */ }
   return ['Повернення за покупку: пишіть суму з мінусом у категорії покупки (наприклад, «Одяг −1 200»). Витрати категорії зменшаться, гроші повернуться в «мої».',
     'Імпорт з банку робить це сам для «Скасування. …» від Mono: бере категорію покупки з журналу.'];
+}
+
+/** Версія 20: порядок рядків «Регулярних» і кольори. Значення рядків не змінюються, лише місце. */
+function stepRegOrder20_(ss) {
+  const moved = regOrder_(ss);
+  regColors_(ss, true);
+  if (ss.getSheetByName(JOURNAL)) regPlansSync_(ss);
+  return ['«' + REG_SHEET + '»: ' + (moved ? 'рядки впорядковано (угорі «Заплати собі» й «Інвестиції», далі ваші, приклади внизу)' : 'порядок уже такий') + '; кольори груп, вимкнені сірі.'];
 }
 
 /** «Вільно» з «моїх» і «Мін.» від сьогодні вже є? */

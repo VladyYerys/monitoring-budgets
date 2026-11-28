@@ -79,18 +79,21 @@ t('sheet and sync: lists, plans in the journal with the tag, updated in place, p
   assert.ok(r.getRange('E5').getDataValidation().reject && r.getRange('I5').getDataValidation().reject, 'списки «як часто» і «так / ні»');
   const today = env.Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd'), prev = c.prevYm_(today.slice(0, 7));
   const P = k => env.Utilities.parseDate(k, tz, 'yyyy-MM-dd');
-  r.getRange('A5:I5').setValues([['Оренда', 'Оренда житла', 10000, 28, 'щомісяця', '', '', '', 'так']]);
+  const free0 = 5 + r.getRange('A5:A54').getValues().findIndex(x => !x[0]);               // ваш новий рядок унизу, під прикладами
+  r.getRange('A' + free0 + ':I' + free0).setValues([['Оренда', 'Оренда житла', 10000, 28, 'щомісяця', '', '', '', 'так']]);
   j.getRange('A5:E6').setValues([[P(today), 99, 'Продукти', 'мій рядок', '✅ факт'],
     [P(prev + '-10'), 10000, 'Оренда житла', '[Регулярний] Оренда: ' + prev.slice(5) + '.' + prev.slice(0, 4), '🔁 план регулярний']]);
   const s1 = c.regPlansSync_(env.ss);
+  const R = () => 5 + r.getRange('A5:A54').getValues().findIndex(x => x[0] === 'Оренда');   // ваш рядок: під «Заплати собі» й «Інвестиції»
+  assert.strictEqual(R(), 7, 'угорі «Заплати собі» й «Інвестиції», далі ваш рядок');
   const plans = () => c.readJournal_(env.ss).filter(o => o.d.indexOf('[Регулярний] ') === 0);
   assert.ok(s1.added >= 1, JSON.stringify(s1));
   assert.ok(plans().every(o => o.e === '🔁 план регулярний' && o.c === 'Оренда житла'));
   assert.ok(plans().filter(o => o.key >= today).every(o => o.b === 10000 && /^\[Регулярний\] Оренда: \d\d\.\d{4}$/.test(o.d)));
   assert.ok(plans().some(o => o.key < today), 'минулий план без факту лишився');
-  assert.ok(/⚠️ прострочено 10\./.test(r.getRange('J5').getValue()) && /наступний/.test(r.getRange('J5').getValue()), r.getRange('J5').getValue());
+  assert.ok(/⚠️ прострочено 10\./.test(r.getRange('J' + R()).getValue()) && /наступний/.test(r.getRange('J' + R()).getValue()), r.getRange('J' + R()).getValue());
   // нова сума: оновлено на місці
-  r.getRange('C5').setValue(11000);
+  r.getRange('C' + R()).setValue(11000);
   const s2 = c.regPlansSync_(env.ss);
   assert.ok(s2.updated >= 1 && s2.added === 0, JSON.stringify(s2));
   assert.ok(plans().filter(o => o.key >= today).every(o => o.b === 11000));
@@ -100,12 +103,12 @@ t('sheet and sync: lists, plans in the journal with the tag, updated in place, p
   c.regPlansSync_(env.ss);
   assert.ok(!plans().some(o => o.key < today), 'план сплаченого місяця прибрано');
   assert.ok(c.readJournal_(env.ss).some(o => o.d === 'переказ орендодавцю') && c.readJournal_(env.ss).some(o => o.d === 'мій рядок'));
-  assert.ok(!/прострочено/.test(r.getRange('J5').getValue()));
+  assert.ok(!/прострочено/.test(r.getRange('J' + R()).getValue()));
   // вимкнули: майбутні плани геть
-  r.getRange('I5').setValue('ні');
+  r.getRange('I' + R()).setValue('ні');
   c.regPlansSync_(env.ss);
   assert.strictEqual(plans().length, 0);
-  assert.strictEqual(r.getRange('J5').getValue(), 'вимкнено');
+  assert.strictEqual(r.getRange('J' + R()).getValue(), 'вимкнено');
 });
 
 t('schedule: once a day or after an edit on «Регулярні» (onEdit marks it, mbsEdit asks for a soon run); menu item exists', () => {
@@ -137,16 +140,19 @@ t('examples: 21 kinds (subscriptions, rent, utilities, fuel, sport, insurance, s
   const noteA4 = r.getRange('A4').getNotes()[0][0];
   assert.ok(/приклади/.test(noteA4) && /«так»/.test(noteA4), 'підказка про приклади: у примітці на «Назва» (рядки 1–3: шапка)');
   assert.ok(r.getRange('J5:J' + (4 + n)).getValues().every(x => /^💡 приклад, «ні»: /.test(x[0])), 'підказка в «Стані»');
-  assert.ok(/Борги/.test(r.getRange('J18').getValue()), 'кредит: на «Борги»');
+  const at = name => 5 + r.getRange('A5:A54').getValues().findIndex(x => x[0] === name);
+  assert.ok(/Борги/.test(r.getRange('J' + at('Кредит у банку')).getValue()), 'кредит: на «Борги»');
+  assert.deepStrictEqual([r.getRange('A5').getValue(), r.getRange('A6').getValue()], ['Заплати собі', 'Інвестиції'], 'угорі навіть як приклади');
   assert.strictEqual(c.readJournal_(env.ss).filter(o => o.d.indexOf('[Регулярний] ') === 0).length, 0, 'прикладів у журналі немає');
   assert.strictEqual(c.regOwn_(env.ss).length, 0, 'приклади не рахуються як ваші');
   assert.ok(/Як додати/.test(env.ss.getSheetByName('Борги').getRange('A3').getValue()));
   // ваш: приклад з «так» стає планом
-  r.getRange('I5').setValue('так');
+  r.getRange('I' + at('Netflix')).setValue('так');
   c.regPlansSync_(env.ss);
   assert.strictEqual(c.regOwn_(env.ss).length, 1);
   assert.ok(c.readJournal_(env.ss).some(o => o.d.indexOf('[Регулярний] Netflix: ') === 0));
-  assert.ok(!/приклад/.test(r.getRange('J5').getValue()));
+  assert.strictEqual(at('Netflix'), 7, 'увімкнений приклад став вашим: над прикладами');
+  assert.ok(!/приклад/.test(r.getRange('J7').getValue()));
   // ще раз не додаються
   assert.strictEqual(c.regExamplesAdd_(env.ss), 0);
   // стара таблиця: ваші рядки зверху, приклади після них
@@ -156,8 +162,7 @@ t('examples: 21 kinds (subscriptions, rent, utilities, fuel, sport, insurance, s
   env2.docProps.deleteProperty('reg_ex');
   env2.docProps.setProperty('schema_v', '9');
   env2.ctx.schemaTick_(env2.ss);
-  assert.strictEqual(r2.getRange('A5').getValue(), 'Моя оренда');
-  assert.strictEqual(r2.getRange('A7').getValue(), 'Netflix');
+  assert.deepStrictEqual(r2.getRange('A5:A9').getValues().map(x => x[0]), ['Заплати собі', 'Інвестиції', 'Моя оренда', 'Моя підписка', 'Netflix']);
   assert.strictEqual(env2.ctx.regOwn_(env2.ss).length, 2);
 });
 
@@ -211,10 +216,41 @@ t('📊 categories «Заплати собі» and «Інвестиції» (typ
   assert.strictEqual(env2.docProps.getProperty('schema_v'), String(c2.schemaLast_()));
   assert.ok(d2.getRange('A5:A84').getValues().some(x => x[0] === 'Заплати собі') && d2.getRange('A5:A84').getValues().some(x => x[0] === 'Інвестиції'));
   const names = r2.getRange('A5:A54').getValues().map(x => x[0]);
-  assert.ok(names.indexOf('Заплати собі') >= 0 && names.indexOf('Інвестиції') >= 0 && names.indexOf('Netflix') === 0, names.join(','));
+  assert.deepStrictEqual(names.slice(0, 3), ['Заплати собі', 'Інвестиції', 'Netflix'], names.join(','));
   assert.ok(/СОБІ Й ІНВЕСТИЦІЇ/.test(r2.getRange('A1').getFormula()) && String(r2.getRange('A2').getValue()).indexOf('Кожен рядок') < 0);
   assert.strictEqual(K(c2, 'STEPS').find(x => x.v === 18).done(env2.ss), true);
   assert.strictEqual(c2.regExamplesMore_(env2.ss), 0, 'вдруге не додаються');
+});
+
+t('🎨 order and colors (version 20): «Заплати собі» and «Інвестиції» on top, then yours in your order, then examples, then empty; a row you add at the bottom moves above the examples; notes move with rows; enabled rows: colour of the category group, disabled grey', () => {
+  const env = setup(), c = env.ctx, r = env.ss.getSheetByName('Регулярні');
+  const names = () => r.getRange('A5:A54').getValues().map(x => x[0]).filter(Boolean);
+  const free = 5 + r.getRange('A5:A54').getValues().findIndex(x => !x[0]);
+  r.getRange('A' + free + ':I' + free).setValues([['Моя оренда', 'Оренда житла', 9000, 1, 'щомісяця', '', '', '', 'так']]);
+  r.getRange('A' + (free + 1) + ':I' + (free + 1)).setValues([['Спортзал мій', 'Спорт', 700, 5, 'щомісяця', '', '', '', 'ні']]);
+  assert.strictEqual(c.regOrder_(env.ss), true);
+  const n = names();
+  assert.deepStrictEqual(n.slice(0, 4), ['Заплати собі', 'Інвестиції', 'Моя оренда', 'Спортзал мій'], n.join(', '));
+  assert.ok(n.indexOf('Netflix') > 3);
+  assert.ok(/^💡 Приклад/.test(r.getRange('A5').getNotes()[0][0]) && r.getRange('A7').getNotes()[0][0] === '', 'примітки поїхали з рядками');
+  assert.strictEqual(r.getRange('C7').getValue(), 9000);
+  assert.strictEqual(c.regOrder_(env.ss), false, 'вдруге нічого');
+  // кольори: P (ключ), правила A5:J54: вимкнені сірі першими, далі групи
+  c.regColors_(env.ss, true);
+  assert.ok(/"self"/.test(r.getRange('P5').getFormula()) && /VLOOKUP\(\$B5,'Довідник'!\$A\$5:\$C\$84,3,FALSE\)/.test(r.getRange('P5').getFormula()));
+  const cf = r.cf.filter(x => x.spec.ranges.some(g => g.getRow() === 5));
+  assert.ok(/\$I5<>"так"/.test(cf[0].spec.formula) && cf[0].spec.setFontColor === '#9aa0a6', 'перше правило: вимкнені сірі');
+  ['self', 'Надходження', 'Заощадження', '🏠 Дім'].forEach(k => assert.ok(cf.some(x => x.spec.formula.indexOf('$P5="' + k + '"') > 0), k));
+  assert.ok(r.cf.some(x => x.spec.ranges.every(g => g.getLastRow() <= 3)), 'правила шапки лишились');
+  const len = r.cf.length; c.regColors_(env.ss, true);
+  assert.strictEqual(r.cf.length, len, 'не накопичуються');
+  assert.strictEqual(c.regColors_(env.ss), false, 'групи ті самі: не переписує');
+  // крок 20: старий порядок → новий
+  r.getRange('P5:P54').setValues(Array.from({ length: 50 }, () => ['']));
+  env.docProps.setProperty('schema_v', '19');
+  c.schemaTick_(env.ss);
+  assert.strictEqual(env.docProps.getProperty('schema_v'), String(c.schemaLast_()));
+  assert.ok(r.getRange('P5').getFormula() !== '');
 });
 
 console.log(n + ' tests passed');

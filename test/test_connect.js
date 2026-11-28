@@ -150,7 +150,7 @@ t('step 3: search in the journal, add picked ones to «Регулярні» (pla
   const add = c.cnRegAdd([{ name: 'Netflix', cat: 'Підписки', amount: 299, day: 12, per: 'щомісяця' }, { name: 'Щось', cat: 'Немає такої', amount: 10, day: 1 }]);
   assert.strictEqual(add.added, 1); assert.strictEqual(JSON.stringify(add.skipped), JSON.stringify(['Щось']));
   assert.ok(add.plans >= 1);
-  assert.strictEqual(env.ss.getSheetByName('Регулярні').getRange('A5').getValue(), 'Netflix');
+  assert.strictEqual(env.ss.getSheetByName('Регулярні').getRange('A7').getValue(), 'Netflix', 'під «Заплати собі» й «Інвестиції»');
   assert.ok(c.readJournal_(env.ss).some(o => /^\[Регулярний\] Netflix: /.test(o.d)));
   assert.strictEqual(c.cnRegSuggest(false).items.length, 0, 'уже на аркуші');
   // глибше: Mono, 2 запити по 31 день, нічого не пишеться в журнал
